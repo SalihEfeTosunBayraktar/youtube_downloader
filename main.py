@@ -872,26 +872,58 @@ class App(ctk.CTk):
             
             # Reset UI
             self.after(0, lambda i=item: i.progress.grid())
+            self.after(0, lambda i=item: i.progress.set(0))
             self.after(0, lambda i=item: i.status_label.configure(text=self.tr["downloading"], text_color=("blue", "#3B8ED0")))
             
             opts = item.get_options()
             url = item.info.get('webpage_url')
             
-            def progress_hook(d, current_item=item):
-                if d['status'] == 'downloading':
-                    try:
-                        # Byte tabanlı yüzde hesapla (daha güvenilir)
-                        downloaded = d.get('downloaded_bytes', 0)
-                        total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
-                        if total > 0:
-                            percent = downloaded / total
-                            self.after(0, lambda p=percent, i=current_item: i.progress.set(min(p, 1.0)))
-                    except Exception as e:
-                        pass
-                elif d['status'] == 'finished':
-                    self.after(0, lambda i=current_item: i.progress.set(1.0))
-
-            res = self.downloader.download_video(url, opts, progress_callback=progress_hook)
+            # İndirilen dosyaları takip et
+            seen_files = set()
+            
+            def make_progress_hook(current_item, files_set):
+                def progress_hook(d):
+                    if d['status'] == 'downloading':
+                        try:
+                            filename = d.get('filename', '')
+                            downloaded = d.get('downloaded_bytes', 0)
+                            total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+                            
+                            if total > 0:
+                                file_progress = downloaded / total
+                                # Kaç dosya indirildi?
+                                num_seen = len(files_set)
+                                if filename not in files_set:
+                                    files_set.add(filename)
+                                    num_seen = len(files_set)
+                                
+                                # Video+Audio = 2 dosya varsayımı
+                                base_progress = (num_seen - 1) * 0.5 if num_seen > 0 else 0
+                                current_progress = file_progress * 0.5
+                                overall = min(base_progress + current_progress, 1.0)
+                                
+                                self.after(0, lambda p=overall, i=current_item: i.progress.set(p))
+                                
+                                # Aşama belirteci
+                                if num_seen <= 1:
+                                    self.after(0, lambda i=current_item: i.status_label.configure(text="📹 Video indiriliyor...", text_color=("blue", "#3B8ED0")))
+                                else:
+                                    self.after(0, lambda i=current_item: i.status_label.configure(text="🔊 Ses indiriliyor...", text_color=("purple", "#9B59B6")))
+                        except:
+                            pass
+                    elif d['status'] == 'finished':
+                        self.after(0, lambda i=current_item: i.progress.set(1.0))
+                    
+                    # Post-processing durumu
+                    if d.get('status') == 'finished' and d.get('postprocessor'):
+                        self.after(0, lambda i=current_item: i.status_label.configure(text="⚙️ Birleştiriliyor...", text_color=("orange", "#FFA500")))
+                    elif d.get('postprocessor'):
+                        self.after(0, lambda i=current_item: i.status_label.configure(text="⚙️ Birleştiriliyor...", text_color=("orange", "#FFA500")))
+                
+                return progress_hook
+            
+            hook = make_progress_hook(item, seen_files)
+            res = self.downloader.download_video(url, opts, progress_callback=hook)
             
             if res == "Success":
                  self.after(0, lambda i=item: self.move_to_completed(i))
