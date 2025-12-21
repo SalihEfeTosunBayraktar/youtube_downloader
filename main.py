@@ -633,7 +633,7 @@ class VideoItem(ctk.CTkFrame):
         self.quality_menu.grid(row=1, column=2, padx=5, pady=2, sticky="w")
 
         # Status / Remove
-        self.status_label = ctk.CTkLabel(self, text=self.tr["queued"], text_color="gray", font=("Arial", 10))
+        self.status_label = ctk.CTkLabel(self, text=self.tr["queued"], text_color=("gray50", "gray80"), font=ctk.CTkFont(size=12, weight="bold"))
         self.status_label.grid(row=2, column=1, padx=5, pady=(0,5), sticky="w")
 
         self.remove_btn = ctk.CTkButton(self, text="X", width=30, height=20, fg_color="red", hover_color="darkred", command=lambda: self.remove_callback(self))
@@ -855,7 +855,7 @@ class App(ctk.CTk):
             
             # Reset UI
             self.after(0, lambda i=item: i.progress.grid())
-            self.after(0, lambda i=item: i.status_label.configure(text=self.tr["downloading"], text_color="blue"))
+            self.after(0, lambda i=item: i.status_label.configure(text=self.tr["downloading"], text_color=("blue", "#3B8ED0")))
             
             opts = item.get_options()
             url = item.info.get('webpage_url')
@@ -874,7 +874,7 @@ class App(ctk.CTk):
             if res == "Success":
                  self.after(0, lambda i=item: self.move_to_completed(i))
             else:
-                 self.after(0, lambda i=item: i.status_label.configure(text=self.tr["failed"], text_color="red"))
+                 self.after(0, lambda i=item: i.status_label.configure(text=self.tr["failed"], text_color=("red", "#E04F5F")))
 
         self.is_downloading = False
         self.after(0, lambda: self.start_btn.configure(state="normal", text=self.tr["start_all"]))
@@ -885,7 +885,7 @@ class App(ctk.CTk):
              self.after(0, lambda: self.open_download_folder(path))
 
     def move_to_completed(self, item):
-        item.status_label.configure(text=self.tr["completed"], text_color="green")
+        item.status_label.configure(text=self.tr["completed"], text_color=("green", "#2CC985"))
         item.progress.grid_remove() 
         
         if item in self.queue_items:
@@ -900,7 +900,7 @@ class App(ctk.CTk):
         # Simpler to create new instance.
         new_item = VideoItem(self.scroll_completed, item.info, self.settings, lambda i: i.destroy(), self.tr)
         new_item.pack(fill="x", padx=5, pady=5)
-        new_item.status_label.configure(text=self.tr["completed"], text_color="green")
+        new_item.status_label.configure(text=self.tr["completed"], text_color=("green", "#2CC985"))
         new_item.progress.grid_remove()
         
         # Modify UI
