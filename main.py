@@ -122,9 +122,8 @@ class SettingsDialog(ctk.CTkToplevel):
         self.geometry("400x750")
         self.resizable(False, False)
         self.attributes("-topmost", True)
-        
         if os.path.exists(icon_path):
-            self.after(200, lambda: self.iconbitmap(icon_path))
+            self.iconbitmap(icon_path)
 
         self.grid_columnconfigure(0, weight=1)
 
@@ -137,7 +136,6 @@ class SettingsDialog(ctk.CTkToplevel):
         
         self.lang_var = ctk.StringVar(value=self.lang_code)
         ctk.CTkOptionMenu(lang_frame, values=["English", "Turkish"], variable=self.lang_var).pack(fill="x", padx=10, pady=5)
-
 
         # Download Path
         path_frame = ctk.CTkFrame(self)
@@ -177,7 +175,6 @@ class SettingsDialog(ctk.CTkToplevel):
         
         ctk.CTkLabel(app_frame, text=self.tr["restart_hint"], font=("Arial", 10), text_color="gray").pack(anchor="w", padx=10, pady=(0,5))
 
-
         # Defaults
         defaults_frame = ctk.CTkFrame(self)
         defaults_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
@@ -187,11 +184,11 @@ class SettingsDialog(ctk.CTkToplevel):
         ctk.CTkOptionMenu(defaults_frame, values=[self.tr["video"], self.tr["audio"]], variable=self.type_var, command=self.update_formats).pack(fill="x", padx=10, pady=5)
 
         self.format_var = ctk.StringVar(value=self.manager.get("default_format"))
-        self.format_menu = ctk.CTkOptionMenu(defaults_frame, values=["mp4", "mkv"], variable=self.format_var)
+        self.format_menu = ctk.CTkOptionMenu(defaults_frame, values=["mp4", "mkv", "webm"], variable=self.format_var)
         self.format_menu.pack(fill="x", padx=10, pady=5)
 
         self.quality_var = ctk.StringVar(value=self.manager.get("default_quality"))
-        self.quality_menu = ctk.CTkOptionMenu(defaults_frame, values=["best", "1080p", "720p", "480p"], variable=self.quality_var)
+        self.quality_menu = ctk.CTkOptionMenu(defaults_frame, values=["best", "4320p (8K)", "2160p (4K)", "1440p", "1080p", "720p", "480p", "360p", "240p"], variable=self.quality_var)
         self.quality_menu.pack(fill="x", padx=10, pady=5)
 
         # Open Folder Checkbox
@@ -205,6 +202,7 @@ class SettingsDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text=self.tr["created_by"], text_color="gray", font=("Arial", 10)).grid(row=7, column=0, pady=10)
 
         self.update_formats(self.type_var.get())
+        self.on_theme_change(self.theme_var.get())
 
     def on_theme_change(self, mode):
         if mode == "System":
@@ -215,10 +213,10 @@ class SettingsDialog(ctk.CTkToplevel):
     def update_formats(self, choice):
         if choice == self.tr["audio"] or choice == "Audio":
             self.format_menu.configure(values=["mp3", "m4a", "wav"])
-            self.quality_menu.configure(values=["320", "256", "192", "128"])
+            self.quality_menu.configure(values=["320", "256", "192", "160", "128", "96", "64"])
         else:
             self.format_menu.configure(values=["mp4", "mkv", "webm"])
-            self.quality_menu.configure(values=["best", "1080p", "720p", "480p"])
+            self.quality_menu.configure(values=["best", "4320p (8K)", "2160p (4K)", "1440p", "1080p", "720p", "480p", "360p", "240p"])
 
     def browse_path(self):
         path = filedialog.askdirectory()
@@ -288,7 +286,7 @@ class VideoItem(ctk.CTkFrame):
         else: self.type_var.set(self.tr["video"])
 
         self.quality_var = ctk.StringVar(value=self.settings.get("default_quality"))
-        self.quality_menu = ctk.CTkOptionMenu(self, values=["best", "1080p", "720p", "480p"], variable=self.quality_var, width=80, height=20, font=("Arial", 10))
+        self.quality_menu = ctk.CTkOptionMenu(self, values=["best", "4320p (8K)", "2160p (4K)", "1440p", "1080p", "720p", "480p", "360p", "240p"], variable=self.quality_var, width=80, height=20, font=("Arial", 10))
         self.quality_menu.grid(row=1, column=2, padx=5, pady=2, sticky="w")
 
         # Status / Remove
@@ -312,10 +310,11 @@ class VideoItem(ctk.CTkFrame):
 
     def update_options(self, choice):
         if choice == self.tr["audio"]:
-            self.quality_menu.configure(values=["320", "192", "128"])
+            self.quality_menu.configure(values=["320", "256", "192", "160", "128", "96", "64"])
             self.quality_var.set("192")
         else:
-            self.quality_menu.configure(values=["best", "1080p", "720p"])
+            self.quality_menu.configure(values=["mp4", "mkv", "webm"])
+            self.quality_menu.configure(values=["best", "4320p (8K)", "2160p (4K)", "1440p", "1080p", "720p", "480p", "360p", "240p"])
             self.quality_var.set("best")
 
     def load_thumbnail(self, url):
@@ -381,42 +380,49 @@ class App(ctk.CTk):
         self.geometry("500x750")
         self.queue_items = []
         self.is_downloading = False
+        self.settings_window = None
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(1, weight=1)
 
         # --- Header ---
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
+        # REMOVED ENTIRELY to save space
+        # header = ctk.CTkFrame(self, fg_color="transparent")
+        # header.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
         
-        ctk.CTkLabel(header, text=self.tr["title"], font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
-        
-        self.settings_btn = ctk.CTkButton(header, text="⚙", width=40, height=40, command=self.open_settings)
-        self.settings_btn.pack(side="right") 
+        # self.settings_btn = ctk.CTkButton(header, text="⚙", width=40, height=40, command=self.open_settings)
+        # self.settings_btn.pack(side="right") 
 
         # --- Input ---
         input_frame = ctk.CTkFrame(self)
-        input_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        input_frame.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
         
+        self.settings_btn = ctk.CTkButton(input_frame, text="⚙", width=40, height=35, command=self.open_settings)
+        self.settings_btn.pack(side="left", padx=(10, 5), pady=10)
+
         self.url_entry = ctk.CTkEntry(input_frame, placeholder_text=self.tr["paste_link"])
-        self.url_entry.pack(side="left", fill="x", expand=True, padx=10, pady=10)
+        self.url_entry.pack(side="left", fill="x", expand=True, padx=5, pady=10)
         
-        self.add_btn = ctk.CTkButton(input_frame, text="+", width=40, command=self.fetch_info_thread)
-        self.add_btn.pack(side="right", padx=10, pady=10)
+        self.add_btn = ctk.CTkButton(input_frame, text="+", width=40, height=35, command=self.fetch_info_thread)
+        self.add_btn.pack(side="right", padx=(5, 10), pady=10)
 
         # --- Queue ---
         self.scroll_frame = ctk.CTkScrollableFrame(self, label_text=self.tr["queue_label"])
-        self.scroll_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+        self.scroll_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
 
         # --- Footer ---
         footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.grid(row=3, column=0, padx=20, pady=20, sticky="ew")
+        footer.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
         
         self.start_btn = ctk.CTkButton(footer, text=self.tr["start_all"], height=50, font=ctk.CTkFont(size=18, weight="bold"), command=self.start_download_queue)
         self.start_btn.pack(fill="x")
 
     def open_settings(self):
-        SettingsDialog(self, self.settings, self.request_reload)
+        if self.settings_window is None or not self.settings_window.winfo_exists():
+            self.settings_window = SettingsDialog(self, self.settings, self.request_reload)
+            self.settings_window.after(100, self.settings_window.lift)
+        else:
+            self.settings_window.focus()
 
     def request_reload(self):
         self.reload_requested = True

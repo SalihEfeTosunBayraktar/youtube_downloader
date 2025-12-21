@@ -95,9 +95,57 @@ class YoutubeDownloader:
             
             ydl_opts['merge_output_format'] = target_ext
 
+        # Prepare YDL options specifically to resolve filename first
+        # We need to know the potential filename to check for conflicts
+        # This requires fetching info first
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
+            # Determine final extension and basic filename
+            # Note: prepare_filename might return the temp file (e.g. .webm before .mp4 merge)
+            # We want to check the FINAL file existence.
+            
+            title = info.get('title', 'video')
+            # Sanitize title simply or let ydl do it? 
+            # We will use ydl's sanitize_filename loosely or manually
+            title = "".join([c for c in title if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
+            
+            final_ext = target_ext
+            
+            base_filename = title
+            counter = 1
+            
+            # loop to find unique name
+            while True:
+                if counter == 1:
+                    candidate_name = f"{base_filename}.{final_ext}"
+                else:
+                    candidate_name = f"{base_filename} ({counter}).{final_ext}"
+                
+                full_path = os.path.join(output_path, candidate_name)
+                if not os.path.exists(full_path):
+                    # Found unique name
+                    # We must provide this exact path to yt-dlp as outtmpl
+                    # However, we must strip extension for outtmpl if we want ydl to handle extension?
+                    # No, simply providing the full path (minus extension if ydl adds it, or with it?)
+                    # Best way: provide outtmpl with the chosen NAME but let YDL handle extension placeholders if needed?
+                    # BUT we want to enforce THIS name.
+                    # Since we are merging/converting, ydl might use intermediate files.
+                    # If we set outtmpl to 'C:/path/to/file (1)', and let extension be %(ext)s, 
+                    # ydl might create 'file (1).webm' then merge to 'file (1).mp4'.
+                    # This matches our expectation.
+                    
+                    name_without_ext = os.path.splitext(candidate_name)[0]
+                    ydl_opts['outtmpl'] = os.path.join(output_path, f"{name_without_ext}.%(ext)s")
+                    break
+                counter += 1
+
+            # Determine quality again just in case (code duplication avoided by not changing earlier logic much)
+            # Now download with the specific outtmpl
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
+                
             return "Success"
         except Exception as e:
             return str(e)
