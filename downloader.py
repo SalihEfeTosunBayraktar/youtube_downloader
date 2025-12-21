@@ -130,6 +130,13 @@ class YoutubeDownloader:
                      ydl_opts['format'] = f"bestvideo+bestaudio/best"
 
             ydl_opts['merge_output_format'] = ext
+            
+            # Opus codec'ini AAC'ye dönüştür (basit oynatıcılarda uyumluluk için)
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegVideoRemuxer',
+                'preferedformat': ext,
+            }]
+            ydl_opts['postprocessor_args'] = ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
 
         try:
             # Use UniqueYoutubeDL to enforce unique filenames
