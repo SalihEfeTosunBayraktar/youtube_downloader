@@ -817,14 +817,31 @@ class App(ctk.CTk):
         url = self.url_entry.get().strip()
         if not url: return
         self.add_btn.configure(state="disabled")
+        self.loading_animation_active = True
+        self.animate_loading_button()
         threading.Thread(target=self.fetch_info, args=(url,)).start()
+
+    def animate_loading_button(self):
+        """Dönen yükleme animasyonu"""
+        if not hasattr(self, 'loading_animation_active') or not self.loading_animation_active:
+            return
+        
+        loading_chars = ["◐", "◓", "◑", "◒"]
+        if not hasattr(self, 'loading_index'):
+            self.loading_index = 0
+        
+        self.add_btn.configure(text=loading_chars[self.loading_index % len(loading_chars)])
+        self.loading_index += 1
+        self.after(150, self.animate_loading_button)
 
     def fetch_info(self, url):
         info = self.downloader.get_info(url)
         self.after(0, self.add_to_queue, info)
 
     def add_to_queue(self, info):
-        self.add_btn.configure(state="normal")
+        # Yükleme animasyonunu durdur
+        self.loading_animation_active = False
+        self.add_btn.configure(state="normal", text="+")
         self.url_entry.delete(0, "end")
         
         if 'error' in info:
@@ -860,14 +877,19 @@ class App(ctk.CTk):
             opts = item.get_options()
             url = item.info.get('webpage_url')
             
-            def progress_hook(d):
+            def progress_hook(d, current_item=item):
                 if d['status'] == 'downloading':
                     try:
-                        p = d.get('_percent_str', '0%').replace('%','')
-                        self.after(0, lambda: item.progress.set(float(p)/100))
-                    except: pass
+                        # Byte tabanlı yüzde hesapla (daha güvenilir)
+                        downloaded = d.get('downloaded_bytes', 0)
+                        total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+                        if total > 0:
+                            percent = downloaded / total
+                            self.after(0, lambda p=percent, i=current_item: i.progress.set(min(p, 1.0)))
+                    except Exception as e:
+                        pass
                 elif d['status'] == 'finished':
-                     self.after(0, lambda: item.progress.set(1.0))
+                    self.after(0, lambda i=current_item: i.progress.set(1.0))
 
             res = self.downloader.download_video(url, opts, progress_callback=progress_hook)
             

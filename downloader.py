@@ -71,7 +71,15 @@ class YoutubeDownloader:
     def get_info(self, url):
         """Fetches metadata for the given URL."""
         try:
-            with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
+            # Hızlı bilgi alma için optimize edilmiş seçenekler
+            fast_opts = {
+                **self.ydl_opts,
+                'extract_flat': 'in_playlist',  # Playlist'te sadece temel bilgileri al
+                'skip_download': True,
+                'quiet': True,
+                'no_warnings': True,
+            }
+            with yt_dlp.YoutubeDL(fast_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 return {
                     'title': info.get('title'),
@@ -79,7 +87,7 @@ class YoutubeDownloader:
                     'duration': info.get('duration'),
                     'uploader': info.get('uploader'),
                     'is_playlist': 'entries' in info,
-                    'webpage_url': info.get('webpage_url'),
+                    'webpage_url': info.get('webpage_url') or url,
                 }
         except Exception as e:
             return {'error': str(e)}
