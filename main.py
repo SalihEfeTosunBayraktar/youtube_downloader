@@ -167,7 +167,17 @@ class SettingsDialog(ctk.CTkToplevel):
         
         current_accent = self.manager.get("accent_color").replace("_", " ").title()
         # map back to display name if simple name
-        fixed_display_name = next((name for name in self.color_names if name.lower().replace(" ", "_") == self.manager.get("accent_color")), current_accent)
+        match_gen = (name for name in self.color_names if name.lower().replace(" ", "_") == self.manager.get("accent_color"))
+        fixed_display_name = next(match_gen, self.color_names[0]) # Default to first color if no match
+        
+        # If exact match found, use it, otherwise if current_accent looks valid?
+        # actually lets just default to Crimson Red if not found to be safe, or just keep what we have if it's displayable?
+        # usage of next(..., default) covers the crash. 
+        # Refined logic:
+        if self.manager.get("accent_color") == "red":
+            fixed_display_name = "Crimson Red"
+        elif self.manager.get("accent_color") == "orange":
+            fixed_display_name = "Golden Orange"
         
         self.color_var = ctk.StringVar(value=fixed_display_name)
         self.color_menu = ctk.CTkOptionMenu(app_frame, values=self.color_names, variable=self.color_var)
