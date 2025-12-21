@@ -86,8 +86,10 @@ class YoutubeDownloader:
                     'thumbnail': info.get('thumbnail'),
                     'duration': info.get('duration'),
                     'uploader': info.get('uploader'),
-                    'is_playlist': 'entries' in info,
+                    'is_playlist': 'entries' in info or info.get('_type') == 'playlist',
+                    'playlist_count': info.get('playlist_count') or (len(info['entries']) if 'entries' in info and isinstance(info['entries'], list) else None),
                     'webpage_url': info.get('webpage_url') or url,
+                    'original_url': url,
                 }
         except Exception as e:
             return {'error': str(e)}
@@ -110,7 +112,18 @@ class YoutubeDownloader:
             'overwrites': True, # We handle uniqueness via filename change
         }
 
-        if options.get('is_playlist'):
+        if options.get('is_playlist') or 'list=' in url:
+            # Force playlist mode by explicitly using the playlist URL
+            try:
+                if 'list=' in url:
+                    from urllib.parse import parse_qs, urlparse
+                    parsed = urlparse(url)
+                    qs = parse_qs(parsed.query)
+                    if 'list' in qs:
+                        playlist_id = qs['list'][0]
+                        url = f"https://www.youtube.com/playlist?list={playlist_id}"
+            except: pass
+
             ydl_opts['noplaylist'] = False
             # Playlist subfolder structure: output_path/PlaylistName/
             ydl_opts['outtmpl'] = os.path.join(output_path, '%(playlist_title)s', '%(title)s.%(ext)s')
@@ -133,7 +146,8 @@ class YoutubeDownloader:
             else:
                  height = quality.split('p')[0]
                  if height.isdigit():
-                     ydl_opts['format'] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]"
+                     # Fallback to general best if specific height combo fails
+                     ydl_opts['format'] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
                  else:
                      ydl_opts['format'] = f"bestvideo+bestaudio/best"
 
