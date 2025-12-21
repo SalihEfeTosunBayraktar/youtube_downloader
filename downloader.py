@@ -59,14 +59,24 @@ class YoutubeDownloader:
         ydl_opts = {
             'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_callback] if progress_callback else [],
-            'noplaylist': True, # Default to single video unless playlist requested, handling playlists needs different logic usually
+            'noplaylist': True, 
             'ffmpeg_location': self.ydl_opts.get('ffmpeg_location'),
+            'ignoreerrors': True, # Critical for playlists to keep going
         }
 
         if options.get('is_playlist'):
             ydl_opts['noplaylist'] = False
-            ydl_opts['outtmpl'] = '%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s'
+            # Fix: Ensure the directory structure is joined correctly with output_path
+            # outtmpl becomes: download_path/PlaylistName/Index - Title.ext
+            ydl_opts['outtmpl'] = os.path.join(output_path, '%(playlist_title)s', '%(playlist_index)s - %(title)s.%(ext)s')
+        else:
+            # Check duplicate filename for single video
+            # (Keep existing duplicate logic for single videos)
+            pass 
 
+        # We need to apply duplicate logic only for non-playlists or complex playlists?
+        # For playlists, yt-dlp handles overwrites usually, but let's leave it to yt-dlp for now to avoid complex pre-fetching of every item.
+        
         format_type = options.get('format_type', 'video')
         target_ext = options.get('ext', 'mp4')
 
@@ -79,14 +89,10 @@ class YoutubeDownloader:
             }]
         else:
             # Video
-            # Simple quality selection logic
             audio_selection = 'bestaudio[ext=m4a]' if target_ext == 'mp4' else 'bestaudio'
-            
             if options.get('quality') == 'best':
                 ydl_opts['format'] = f'bestvideo+{audio_selection}/best'
             else:
-                # Try to target height if possible, else best
-                # This is a basic implementation. Robust format selection is complex.
                 res = options.get('quality', '').replace('p', '')
                 if res.isdigit():
                     ydl_opts['format'] = f'bestvideo[height<={res}]+{audio_selection}/best[height<={res}]'
@@ -95,54 +101,33 @@ class YoutubeDownloader:
             
             ydl_opts['merge_output_format'] = target_ext
 
-        # Prepare YDL options specifically to resolve filename first
-        # We need to know the potential filename to check for conflicts
-        # This requires fetching info first
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                
-            # Determine final extension and basic filename
-            # Note: prepare_filename might return the temp file (e.g. .webm before .mp4 merge)
-            # We want to check the FINAL file existence.
-            
-            title = info.get('title', 'video')
-            # Sanitize title simply or let ydl do it? 
-            # We will use ydl's sanitize_filename loosely or manually
-            title = "".join([c for c in title if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
-            
-            final_ext = target_ext
-            
-            base_filename = title
-            counter = 1
-            
-            # loop to find unique name
-            while True:
-                if counter == 1:
-                    candidate_name = f"{base_filename}.{final_ext}"
-                else:
-                    candidate_name = f"{base_filename} ({counter}).{final_ext}"
-                
-                full_path = os.path.join(output_path, candidate_name)
-                if not os.path.exists(full_path):
-                    # Found unique name
-                    # We must provide this exact path to yt-dlp as outtmpl
-                    # However, we must strip extension for outtmpl if we want ydl to handle extension?
-                    # No, simply providing the full path (minus extension if ydl adds it, or with it?)
-                    # Best way: provide outtmpl with the chosen NAME but let YDL handle extension placeholders if needed?
-                    # BUT we want to enforce THIS name.
-                    # Since we are merging/converting, ydl might use intermediate files.
-                    # If we set outtmpl to 'C:/path/to/file (1)', and let extension be %(ext)s, 
-                    # ydl might create 'file (1).webm' then merge to 'file (1).mp4'.
-                    # This matches our expectation.
+        # Only Run Duplicate Logic for Single Videos (Not Playlists)
+        if not options.get('is_playlist'):
+             try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
                     
-                    name_without_ext = os.path.splitext(candidate_name)[0]
-                    ydl_opts['outtmpl'] = os.path.join(output_path, f"{name_without_ext}.%(ext)s")
-                    break
-                counter += 1
+                title = info.get('title', 'video')
+                # Basic sanitize
+                title = "".join([c for c in title if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
+                final_ext = target_ext
+                base_filename = title
+                counter = 1
+                
+                while True:
+                    if counter == 1: candidate = f"{base_filename}.{final_ext}"
+                    else: candidate = f"{base_filename} ({counter}).{final_ext}"
+                    
+                    if not os.path.exists(os.path.join(output_path, candidate)):
+                        # Valid unique name
+                        name_no_ext = os.path.splitext(candidate)[0]
+                        ydl_opts['outtmpl'] = os.path.join(output_path, f"{name_no_ext}.%(ext)s")
+                        break
+                    counter += 1
+             except:
+                 pass # Fallback to default behavior if extraction fails
 
-            # Determine quality again just in case (code duplication avoided by not changing earlier logic much)
-            # Now download with the specific outtmpl
+        try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
                 
