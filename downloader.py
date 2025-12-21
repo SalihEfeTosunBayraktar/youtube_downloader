@@ -1,12 +1,30 @@
 import yt_dlp
 import os
+import sys
+import shutil
 import threading
+
+def get_ffmpeg_path():
+    """Returns the path to the bundled ffmpeg executable."""
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller temp folder
+        ffmpeg_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
+        if os.path.exists(ffmpeg_path):
+            return ffmpeg_path
+    
+    # Check local directory or PATH
+    local_ffmpeg = os.path.join(os.getcwd(), 'ffmpeg.exe')
+    if os.path.exists(local_ffmpeg):
+        return local_ffmpeg
+        
+    return shutil.which('ffmpeg')
 
 class YoutubeDownloader:
     def __init__(self):
         self.ydl_opts = {
             'quiet': True,
             'no_warnings': True,
+            'ffmpeg_location': os.path.dirname(get_ffmpeg_path()) if get_ffmpeg_path() else None
         }
 
     def get_info(self, url):
@@ -36,10 +54,13 @@ class YoutubeDownloader:
         """
         
         # Base options
+        output_path = options.get('output_path', os.getcwd())
+        
         ydl_opts = {
-            'outtmpl': '%(title)s.%(ext)s',
+            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_callback] if progress_callback else [],
             'noplaylist': True, # Default to single video unless playlist requested, handling playlists needs different logic usually
+            'ffmpeg_location': self.ydl_opts.get('ffmpeg_location'),
         }
 
         if options.get('is_playlist'):

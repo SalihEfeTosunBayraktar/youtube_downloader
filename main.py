@@ -3,222 +3,327 @@ import threading
 from PIL import Image
 import urllib.request
 import io
+import os
+import json
+import subprocess
+from tkinter import filedialog
 from downloader import YoutubeDownloader
 
-ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-ctk.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
+ctk.set_appearance_mode("System")
+ctk.set_default_color_theme("blue")
 
-class App(ctk.CTk):
-    def __init__(self):
-        super().__init__()
+class SettingsManager:
+    def __init__(self, filename="settings.json"):
+        self.filename = filename
+        self.defaults = {
+            "download_path": os.path.join(os.path.expanduser("~"), "Downloads"),
+            "default_type": "Video", # Video, Audio
+            "default_format": "mp4", # mp4, mkv / mp3
+            "default_quality": "best",
+            "open_folder_after": True
+        }
+        self.settings = self.load_settings()
 
-        self.title("Modern YouTube Downloader")
-        self.geometry("900x600")
-        self.minsize(500, 600)
+    def load_settings(self):
+        if not os.path.exists(self.filename):
+            return self.defaults.copy()
+        try:
+            with open(self.filename, 'r') as f:
+                return {**self.defaults, **json.load(f)}
+        except:
+            return self.defaults.copy()
 
-        # Helper
-        self.downloader = YoutubeDownloader()
-        self.current_video_info = None
+    def save_settings(self):
+        try:
+            with open(self.filename, 'w') as f:
+                json.dump(self.settings, f, indent=4)
+        except Exception as e:
+            print(f"Error saving settings: {e}")
 
-        # Layout Configuration
+    def get(self, key):
+        return self.settings.get(key, self.defaults.get(key))
+
+    def set(self, key, value):
+        self.settings[key] = value
+        self.save_settings()
+
+class SettingsDialog(ctk.CTkToplevel):
+    def __init__(self, parent, manager):
+        super().__init__(parent)
+        self.manager = manager
+        self.title("Settings")
+        self.geometry("400x500")
+        self.resizable(False, False)
+        self.attributes("-topmost", True) # Keep on top
+
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1) # Main content area expands
+        self.grid_rowconfigure(5, weight=1)
 
-        # --- Top Bar (URL Input) ---
-        self.top_frame = ctk.CTkFrame(self)
-        self.top_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
-        self.top_frame.grid_columnconfigure(0, weight=1)
+        # Header
+        ctk.CTkLabel(self, text="Application Settings", font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, pady=20)
 
-        self.url_var = ctk.StringVar()
-        self.url_var.trace_add("write", self.on_url_change)
+        # Download Path
+        path_frame = ctk.CTkFrame(self)
+        path_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
         
-        self.url_entry = ctk.CTkEntry(self.top_frame, placeholder_text="Paste YouTube Link Here...", textvariable=self.url_var)
-        self.url_entry.grid(row=0, column=0, padx=(10, 10), pady=10, sticky="ew")
+        ctk.CTkLabel(path_frame, text="Download Location").pack(anchor="w", padx=10, pady=5)
         
-        # self.fetch_btn = ctk.CTkButton(self.top_frame, text="Fetch", width=100, command=self.fetch_info_thread)
-        # self.fetch_btn.grid(row=0, column=1, padx=(0, 10), pady=10)
+        self.path_entry = ctk.CTkEntry(path_frame, placeholder_text=self.manager.get("download_path"))
+        self.path_entry.insert(0, self.manager.get("download_path"))
+        self.path_entry.configure(state="disabled") # Read-only, use browse
+        self.path_entry.pack(side="left", fill="x", expand=True, padx=(10, 5), pady=10)
         
-        self.fetch_timer = None
+        ctk.CTkButton(path_frame, text="Browse", width=60, command=self.browse_path).pack(side="right", padx=(5, 10), pady=10)
 
-        # --- Content Area ---
-        self.content_frame = ctk.CTkFrame(self)
-        self.content_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
-        self.content_frame.grid_columnconfigure(0, weight=1)
-        # We will dynamically pack/grid things here based on fetched info
+        # Defaults
+        defaults_frame = ctk.CTkFrame(self)
+        defaults_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        ctk.CTkLabel(defaults_frame, text="Default Download Options").pack(anchor="w", padx=10, pady=5)
 
-        # Placeholder message
-        self.status_label = ctk.CTkLabel(self.content_frame, text="Ready to download", font=ctk.CTkFont(size=16))
-        self.status_label.pack(expand=True)
+        self.type_var = ctk.StringVar(value=self.manager.get("default_type"))
+        ctk.CTkOptionMenu(defaults_frame, values=["Video", "Audio"], variable=self.type_var, command=self.update_formats).pack(fill="x", padx=10, pady=5)
 
-        # Preview Widgets (Hidden initially)
-        self.preview_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        
-        self.thumb_label = ctk.CTkLabel(self.preview_frame, text="")
-        self.thumb_label.pack(pady=10)
-        
-        self.title_label = ctk.CTkLabel(self.preview_frame, text="", font=ctk.CTkFont(size=18, weight="bold"), wraplength=400)
-        self.title_label.pack(pady=5)
-        
-        self.meta_label = ctk.CTkLabel(self.preview_frame, text="", text_color="gray")
-        self.meta_label.pack(pady=5)
+        self.format_var = ctk.StringVar(value=self.manager.get("default_format"))
+        self.format_menu = ctk.CTkOptionMenu(defaults_frame, values=["mp4", "mkv"], variable=self.format_var)
+        self.format_menu.pack(fill="x", padx=10, pady=5)
 
-        # --- Settings / Action Area ---
-        self.settings_frame = ctk.CTkFrame(self)
-        self.settings_frame.grid(row=2, column=0, padx=20, pady=(10, 20), sticky="ew")
-        self.settings_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        self.quality_var = ctk.StringVar(value=self.manager.get("default_quality"))
+        self.quality_menu = ctk.CTkOptionMenu(defaults_frame, values=["best", "1080p", "720p", "480p"], variable=self.quality_var)
+        self.quality_menu.pack(fill="x", padx=10, pady=5)
 
-        # Type Selection
-        self.type_var = ctk.StringVar(value="Video")
-        self.type_menu = ctk.CTkOptionMenu(self.settings_frame, values=["Video", "Audio"], variable=self.type_var, command=self.update_options)
-        self.type_menu.grid(row=0, column=0, padx=10, pady=20)
+        # Open Folder Checkbox
+        self.open_folder_var = ctk.BooleanVar(value=self.manager.get("open_folder_after"))
+        ctk.CTkCheckBox(self, text="Open folder after download", variable=self.open_folder_var).grid(row=3, column=0, padx=20, pady=20, sticky="w")
 
-        # Format Selection
-        self.format_var = ctk.StringVar(value="mp4")
-        self.format_menu = ctk.CTkOptionMenu(self.settings_frame, values=["mp4", "mkv"], variable=self.format_var)
-        self.format_menu.grid(row=0, column=1, padx=10, pady=20)
+        # Save Button
+        ctk.CTkButton(self, text="Save Settings", command=self.save_and_close).grid(row=4, column=0, padx=20, pady=20, sticky="ew")
 
-        # Quality Selection
-        self.quality_var = ctk.StringVar(value="best")
-        self.quality_menu = ctk.CTkOptionMenu(self.settings_frame, values=["best", "1080p", "720p", "480p"], variable=self.quality_var)
-        self.quality_menu.grid(row=0, column=2, padx=10, pady=20)
+        self.update_formats(self.type_var.get())
 
-        # Download Button
-        self.download_btn = ctk.CTkButton(self.settings_frame, text="Download Now", font=ctk.CTkFont(size=16, weight="bold"), height=40, fg_color="#E50914", hover_color="#B20710", command=self.start_download_thread)
-        self.download_btn.grid(row=0, column=3, padx=20, pady=20, sticky="ew")
+    def update_formats(self, choice):
+        if choice == "Audio":
+            self.format_menu.configure(values=["mp3", "m4a", "wav"])
+            self.quality_menu.configure(values=["320", "256", "192", "128"])
+        else:
+            self.format_menu.configure(values=["mp4", "mkv", "webm"])
+            self.quality_menu.configure(values=["best", "1080p", "720p", "480p"])
 
-        # Progress Bar overlay (bottom of settings or content)
-        self.progress_bar = ctk.CTkProgressBar(self.settings_frame, orientation="horizontal")
-        self.progress_bar.set(0)
-        self.progress_bar.grid(row=1, column=0, columnspan=4, padx=10, pady=(0, 10), sticky="ew")
-        self.progress_bar.grid_remove() # Hide initially
+    def browse_path(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.path_entry.configure(state="normal")
+            self.path_entry.delete(0, "end")
+            self.path_entry.insert(0, path)
+            self.path_entry.configure(state="disabled")
+
+    def save_and_close(self):
+        self.manager.set("download_path", self.path_entry.get())
+        self.manager.set("default_type", self.type_var.get())
+        self.manager.set("default_format", self.format_var.get())
+        self.manager.set("default_quality", self.quality_var.get())
+        self.manager.set("open_folder_after", self.open_folder_var.get())
+        self.destroy()
+
+
+class VideoItem(ctk.CTkFrame):
+    def __init__(self, parent, info, settings_manager, remove_callback):
+        super().__init__(parent)
+        self.info = info
+        self.settings = settings_manager
+        self.remove_callback = remove_callback
+
+        self.grid_columnconfigure(1, weight=1)
+
+        # Thumbnail
+        self.thumb_label = ctk.CTkLabel(self, text="", width=80, height=60)
+        self.thumb_label.grid(row=0, column=0, rowspan=3, padx=5, pady=5)
+        self.load_thumbnail(info.get('thumbnail'))
+
+        # Title
+        title = info.get('title', 'Unknown')
+        if len(title) > 40: title = title[:37] + "..."
+        ctk.CTkLabel(self, text=title, font=ctk.CTkFont(weight="bold")).grid(row=0, column=1, columnspan=2, sticky="w", padx=5, pady=(5,0))
+
+        # Options
+        self.type_var = ctk.StringVar(value=self.settings.get("default_type"))
+        self.type_menu = ctk.CTkOptionMenu(self, values=["Video", "Audio"], variable=self.type_var, width=80, height=20, font=("Arial", 10), command=self.update_options)
+        self.type_menu.grid(row=1, column=1, padx=5, pady=2, sticky="w")
+
+        self.quality_var = ctk.StringVar(value=self.settings.get("default_quality"))
+        self.quality_menu = ctk.CTkOptionMenu(self, values=["best", "1080p", "720p", "480p"], variable=self.quality_var, width=80, height=20, font=("Arial", 10))
+        self.quality_menu.grid(row=1, column=2, padx=5, pady=2, sticky="w")
+
+        # Status / Remove
+        self.status_label = ctk.CTkLabel(self, text="Queued", text_color="gray", font=("Arial", 10))
+        self.status_label.grid(row=2, column=1, padx=5, pady=(0,5), sticky="w")
+
+        self.remove_btn = ctk.CTkButton(self, text="X", width=30, height=20, fg_color="red", hover_color="darkred", command=lambda: self.remove_callback(self))
+        self.remove_btn.grid(row=0, column=3, padx=5, pady=5, sticky="ne")
+
+        # Progress
+        self.progress = ctk.CTkProgressBar(self, height=5)
+        self.progress.set(0)
+        self.progress.grid(row=3, column=0, columnspan=4, padx=5, pady=(0,5), sticky="ew")
+        self.progress.grid_remove()
+
+        self.update_options(self.type_var.get())
+
+        # Restore default if needed because update_options resets
+        self.quality_var.set(self.settings.get("default_quality"))
+
 
     def update_options(self, choice):
         if choice == "Audio":
-            self.format_menu.configure(values=["mp3", "m4a", "wav"])
-            self.format_var.set("mp3")
-            self.quality_menu.configure(values=["320", "256", "192", "128"])
+            self.quality_menu.configure(values=["320", "192", "128"])
             self.quality_var.set("192")
         else:
-            self.format_menu.configure(values=["mp4", "mkv", "webm"])
-            self.format_var.set("mp4")
-            self.quality_menu.configure(values=["best", "1080p", "720p", "480p"])
+            self.quality_menu.configure(values=["best", "1080p", "720p"])
             self.quality_var.set("best")
 
-    def on_url_change(self, *args):
-        if self.fetch_timer:
-            self.after_cancel(self.fetch_timer)
-        self.fetch_timer = self.after(800, self.check_and_fetch)
-
-    def check_and_fetch(self):
-        url = self.url_var.get().strip()
-        if not url: return
-        
-        # Basic validation to avoid useless fetch attempts
-        if "youtube.com" in url or "youtu.be" in url:
-            # Avoid re-fetching same URL if already valid (optional logic could go here)
-            self.fetch_info_thread()
-
-    def fetch_info_thread(self):
-        url = self.url_var.get()
-        if not url:
-            return
-        # self.fetch_btn.configure(state="disabled")
-        self.status_label.configure(text="Fetching metadata...")
-        self.status_label.pack(expand=True)
-        self.preview_frame.pack_forget()
-        
-        threading.Thread(target=self.fetch_info, args=(url,)).start()
-
-    def fetch_info(self, url):
-        info = self.downloader.get_info(url)
-        self.after(0, self.update_ui_with_info, info)
-
-    def update_ui_with_info(self, info):
-        # self.fetch_btn.configure(state="normal")
-        if 'error' in info:
-            self.status_label.configure(text=f"Error: {info['error']}")
-            return
-
-        self.current_video_info = info
-        self.status_label.pack_forget()
-        self.preview_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-        # Update Text
-        self.title_label.configure(text=info.get('title', 'Unknown Title'))
-        self.meta_label.configure(text=f"{info.get('uploader', 'Unknown')} • {self.format_seconds(info.get('duration', 0))}")
-
-        # Update Thumbnail
-        thumbnail_url = info.get('thumbnail')
-        if thumbnail_url:
-            self.load_thumbnail(thumbnail_url)
-
     def load_thumbnail(self, url):
+        if not url: return
         try:
             with urllib.request.urlopen(url) as u:
                 raw_data = u.read()
             image = Image.open(io.BytesIO(raw_data))
-            # Resize keeping aspect ratio roughly
-            image.thumbnail((400, 300))
-            ctk_image = ctk.CTkImage(light_image=image, dark_image=image, size=image.size)
-            self.thumb_label.configure(image=ctk_image, text="")
-        except Exception as e:
-            print(f"Thumb error: {e}")
-            self.thumb_label.configure(text="[No Image]", image=None)
+            image.thumbnail((80, 60))
+            ctk_image = ctk.CTkImage(image, size=image.size)
+            self.thumb_label.configure(image=ctk_image)
+        except: pass
 
-    def format_seconds(self, seconds):
-        if not seconds: return "0:00"
-        m, s = divmod(seconds, 60)
-        h, m = divmod(m, 60)
-        if h:
-            return f"{h}:{m:02d}:{s:02d}"
-        return f"{m}:{s:02d}"
-
-    def start_download_thread(self):
-        if not self.current_video_info:
-            return
-        
-        self.download_btn.configure(state="disabled")
-        self.progress_bar.grid()
-        self.progress_bar.set(0)
-        
-        options = {
-            'format_type': self.type_var.get().lower(),
-            'ext': self.format_var.get(),
-            'quality': self.quality_var.get(),
-            'is_playlist': self.current_video_info.get('is_playlist', False)
+    def get_options(self):
+        ext_map = {"Video": "mp4", "Audio": "mp3"} # Simple mapping
+        return {
+            "format_type": self.type_var.get().lower(),
+            "quality": self.quality_var.get(),
+            "ext": ext_map.get(self.type_var.get(), "mp4"),
+            "is_playlist": self.info.get('is_playlist', False),
+            "output_path": self.settings.get("download_path")
         }
-        url = self.current_video_info.get('webpage_url')
 
-        threading.Thread(target=self.run_download, args=(url, options)).start()
-
-    def run_download(self, url, options):
-        # Callback for progress
-        def progress_hook(d):
-            if d['status'] == 'downloading':
-                # Calculate percentage
-                try:
-                    p = d.get('_percent_str', '0%').replace('%','')
-                    self.after(0, self.progress_bar.set, float(p)/100)
-                except: 
-                    pass
-            elif d['status'] == 'finished':
-                self.after(0, self.progress_bar.set, 1.0)
-
-        result = self.downloader.download_video(url, options, progress_callback=progress_hook)
-        self.after(0, self.download_finished, result)
-
-    def download_finished(self, result):
-        self.download_btn.configure(state="normal")
-        self.progress_bar.grid_remove()
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
         
-        if result == "Success":
-            self.status_label.configure(text="Download Complete!", text_color="green")
-            self.status_label.pack(side="bottom", pady=5)
-            self.after(3000, self.status_label.pack_forget)
-        else:
-            # Show actual error
-            self.status_label.configure(text=f"Error: {result}", text_color="red")
-            self.status_label.pack(side="bottom", pady=5)
+        self.settings = SettingsManager()
+        self.downloader = YoutubeDownloader()
+        
+        self.title("YT Downloader")
+        self.geometry("500x750")
+        self.queue_items = []
+        self.is_downloading = False
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        # --- Header ---
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
+        
+        ctk.CTkLabel(header, text="YouTube Downloader", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
+        
+        self.settings_btn = ctk.CTkButton(header, text="⚙", width=40, height=40, command=self.open_settings)
+        self.settings_btn.pack(side="right")
+
+        # --- Input ---
+        input_frame = ctk.CTkFrame(self)
+        input_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        
+        self.url_entry = ctk.CTkEntry(input_frame, placeholder_text="Paste Link...")
+        self.url_entry.pack(side="left", fill="x", expand=True, padx=10, pady=10)
+        
+        self.add_btn = ctk.CTkButton(input_frame, text="+", width=40, command=self.fetch_info_thread)
+        self.add_btn.pack(side="right", padx=10, pady=10)
+
+        # --- Queue ---
+        self.scroll_frame = ctk.CTkScrollableFrame(self, label_text="Download Queue")
+        self.scroll_frame.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+
+        # --- Footer ---
+        footer = ctk.CTkFrame(self, fg_color="transparent")
+        footer.grid(row=3, column=0, padx=20, pady=20, sticky="ew")
+        
+        self.start_btn = ctk.CTkButton(footer, text="Start Download All", height=50, font=ctk.CTkFont(size=18, weight="bold"), command=self.start_download_queue)
+        self.start_btn.pack(fill="x")
+
+    def open_settings(self):
+        SettingsDialog(self, self.settings)
+
+    def fetch_info_thread(self):
+        url = self.url_entry.get().strip()
+        if not url: return
+        self.add_btn.configure(state="disabled")
+        threading.Thread(target=self.fetch_info, args=(url,)).start()
+
+    def fetch_info(self, url):
+        info = self.downloader.get_info(url)
+        self.after(0, self.add_to_queue, info)
+
+    def add_to_queue(self, info):
+        self.add_btn.configure(state="normal")
+        self.url_entry.delete(0, "end")
+        
+        if 'error' in info:
+            # Simple error dialog or toast could go here
+            print(f"Error: {info['error']}")
+            return
+
+        item = VideoItem(self.scroll_frame, info, self.settings, self.remove_item)
+        item.pack(fill="x", padx=5, pady=5)
+        self.queue_items.append(item)
+
+    def remove_item(self, item):
+        if item in self.queue_items:
+            self.queue_items.remove(item)
+            item.destroy()
+
+    def start_download_queue(self):
+        if self.is_downloading: return
+        if not self.queue_items: return
+
+        self.is_downloading = True
+        self.start_btn.configure(state="disabled", text="Downloading...")
+        
+        threading.Thread(target=self.process_queue).start()
+
+    def process_queue(self):
+        for item in self.queue_items:
+            if item.status_label.cget("text") == "Completed": continue
+            
+            # Reset UI
+            self.after(0, lambda i=item: i.progress.grid())
+            self.after(0, lambda i=item: i.status_label.configure(text="Downloading...", text_color="blue"))
+            
+            opts = item.get_options()
+            url = item.info.get('webpage_url')
+            
+            def progress_hook(d):
+                if d['status'] == 'downloading':
+                    try:
+                        p = d.get('_percent_str', '0%').replace('%','')
+                        self.after(0, lambda: item.progress.set(float(p)/100))
+                    except: pass
+                elif d['status'] == 'finished':
+                     self.after(0, lambda: item.progress.set(1.0))
+
+            res = self.downloader.download_video(url, opts, progress_callback=progress_hook)
+            
+            if res == "Success":
+                 self.after(0, lambda i=item: i.status_label.configure(text="Completed", text_color="green"))
+            else:
+                 self.after(0, lambda i=item: i.status_label.configure(text="Failed", text_color="red"))
+
+        self.is_downloading = False
+        self.after(0, lambda: self.start_btn.configure(state="normal", text="Start Download All"))
+        
+        # Check if open folder enabled
+        if self.settings.get("open_folder_after"):
+             self.after(0, self.open_download_folder)
+
+    def open_download_folder(self):
+        path = self.settings.get("download_path")
+        if os.path.exists(path):
+            os.startfile(path)
 
 if __name__ == "__main__":
     app = App()
