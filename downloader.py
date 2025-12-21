@@ -80,16 +80,18 @@ class YoutubeDownloader:
         else:
             # Video
             # Simple quality selection logic
+            audio_selection = 'bestaudio[ext=m4a]' if target_ext == 'mp4' else 'bestaudio'
+            
             if options.get('quality') == 'best':
-                ydl_opts['format'] = f'bestvideo+bestaudio/best'
+                ydl_opts['format'] = f'bestvideo+{audio_selection}/best'
             else:
                 # Try to target height if possible, else best
                 # This is a basic implementation. Robust format selection is complex.
                 res = options.get('quality', '').replace('p', '')
                 if res.isdigit():
-                    ydl_opts['format'] = f'bestvideo[height<={res}]+bestaudio/best[height<={res}]'
+                    ydl_opts['format'] = f'bestvideo[height<={res}]+{audio_selection}/best[height<={res}]'
                 else:
-                    ydl_opts['format'] = 'bestvideo+bestaudio/best'
+                    ydl_opts['format'] = f'bestvideo+{audio_selection}/best'
             
             ydl_opts['merge_output_format'] = target_ext
 

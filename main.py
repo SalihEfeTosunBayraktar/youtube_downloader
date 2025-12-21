@@ -20,7 +20,9 @@ class SettingsManager:
             "default_type": "Video", # Video, Audio
             "default_format": "mp4", # mp4, mkv / mp3
             "default_quality": "best",
-            "open_folder_after": True
+            "open_folder_after": True,
+            "theme_mode": "System", # System, Dark, Light
+            "accent_color": "blue" # blue, green, dark-blue
         }
         self.settings = self.load_settings()
 
@@ -52,32 +54,43 @@ class SettingsDialog(ctk.CTkToplevel):
         super().__init__(parent)
         self.manager = manager
         self.title("Settings")
-        self.geometry("400x500")
+        self.geometry("400x650") # Taller for more options
         self.resizable(False, False)
-        self.attributes("-topmost", True) # Keep on top
+        self.attributes("-topmost", True)
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(5, weight=1)
+        # self.grid_rowconfigure(6, weight=1)
 
-        # Header
         ctk.CTkLabel(self, text="Application Settings", font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, pady=20)
 
         # Download Path
         path_frame = ctk.CTkFrame(self)
         path_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
-        
         ctk.CTkLabel(path_frame, text="Download Location").pack(anchor="w", padx=10, pady=5)
         
         self.path_entry = ctk.CTkEntry(path_frame, placeholder_text=self.manager.get("download_path"))
         self.path_entry.insert(0, self.manager.get("download_path"))
-        self.path_entry.configure(state="disabled") # Read-only, use browse
+        self.path_entry.configure(state="disabled")
         self.path_entry.pack(side="left", fill="x", expand=True, padx=(10, 5), pady=10)
-        
         ctk.CTkButton(path_frame, text="Browse", width=60, command=self.browse_path).pack(side="right", padx=(5, 10), pady=10)
+
+        # Appearance
+        app_frame = ctk.CTkFrame(self)
+        app_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        ctk.CTkLabel(app_frame, text="Appearance").pack(anchor="w", padx=10, pady=5)
+
+        self.theme_var = ctk.StringVar(value=self.manager.get("theme_mode"))
+        ctk.CTkOptionMenu(app_frame, values=["System", "Dark", "Light"], variable=self.theme_var, command=self.change_theme_mode).pack(fill="x", padx=10, pady=5)
+        
+        self.color_var = ctk.StringVar(value=self.manager.get("accent_color"))
+        ctk.CTkOptionMenu(app_frame, values=["blue", "green", "dark-blue"], variable=self.color_var, command=self.change_accent_color).pack(fill="x", padx=10, pady=5)
+        
+        ctk.CTkLabel(app_frame, text="* Restart required for accent color", font=("Arial", 10), text_color="gray").pack(anchor="w", padx=10, pady=(0,5))
+
 
         # Defaults
         defaults_frame = ctk.CTkFrame(self)
-        defaults_frame.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
+        defaults_frame.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
         ctk.CTkLabel(defaults_frame, text="Default Download Options").pack(anchor="w", padx=10, pady=5)
 
         self.type_var = ctk.StringVar(value=self.manager.get("default_type"))
@@ -93,12 +106,20 @@ class SettingsDialog(ctk.CTkToplevel):
 
         # Open Folder Checkbox
         self.open_folder_var = ctk.BooleanVar(value=self.manager.get("open_folder_after"))
-        ctk.CTkCheckBox(self, text="Open folder after download", variable=self.open_folder_var).grid(row=3, column=0, padx=20, pady=20, sticky="w")
+        ctk.CTkCheckBox(self, text="Open folder after download", variable=self.open_folder_var).grid(row=4, column=0, padx=20, pady=20, sticky="w")
 
         # Save Button
-        ctk.CTkButton(self, text="Save Settings", command=self.save_and_close).grid(row=4, column=0, padx=20, pady=20, sticky="ew")
+        ctk.CTkButton(self, text="Save Settings", command=self.save_and_close).grid(row=5, column=0, padx=20, pady=20, sticky="ew")
 
         self.update_formats(self.type_var.get())
+
+    def change_theme_mode(self, mode):
+        ctk.set_appearance_mode(mode)
+
+    def change_accent_color(self, color):
+        # Applies to new widgets only unless restarted, but we can try
+        # ctk.set_default_color_theme(color) 
+        pass 
 
     def update_formats(self, choice):
         if choice == "Audio":
@@ -122,6 +143,8 @@ class SettingsDialog(ctk.CTkToplevel):
         self.manager.set("default_format", self.format_var.get())
         self.manager.set("default_quality", self.quality_var.get())
         self.manager.set("open_folder_after", self.open_folder_var.get())
+        self.manager.set("theme_mode", self.theme_var.get())
+        self.manager.set("accent_color", self.color_var.get())
         self.destroy()
 
 
@@ -203,9 +226,18 @@ class VideoItem(ctk.CTkFrame):
 
 class App(ctk.CTk):
     def __init__(self):
+        # Load settings first to apply theme
+        self.settings = SettingsManager()
+        
+        # Apply Theme
+        ctk.set_appearance_mode(self.settings.get("theme_mode"))
+        try:
+            ctk.set_default_color_theme(self.settings.get("accent_color"))
+        except:
+             ctk.set_default_color_theme("blue")
+
         super().__init__()
         
-        self.settings = SettingsManager()
         self.downloader = YoutubeDownloader()
         
         self.title("YT Downloader")
