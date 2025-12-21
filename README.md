@@ -59,6 +59,7 @@ py -m PyInstaller --noconfirm --onefile --windowed --name "ModernYoutubeDownload
 ```
 
 ## Credits
+-Icon link https://share.google/s3dgealX7uCYygT1G
 
 - **Developer**: Legendnoobe
 - **Libraries**: CustomTkinter, yt-dlp
