@@ -24,7 +24,7 @@ icon_path = os.path.join(application_path, "app_icon.ico")
 # Localization Dictionary
 TRANSLATIONS = {
     "English": {
-        "title": "Modern YouTube Downloader",
+        "title": "Modern YouTube Downloader by Legendnoobe",
         "settings_title": "Application Settings",
         "download_loc": "Download Location",
         "browse": "Browse",
@@ -49,18 +49,18 @@ TRANSLATIONS = {
         "dark": "Dark",
         "light": "Light",
         "colors": {
-            "electric_blue": "Electric Blue", "neon_cyan": "Neon Cyan", "emerald_green": "Emerald Green",
-            "mint_green": "Mint Green", "lime_green": "Lime Green", "amber_yellow": "Amber Yellow",
-            "golden_orange": "Golden Orange", "deep_orange": "Deep Orange", "coral_red": "Coral Red",
-            "crimson_red": "Crimson Red", "hot_pink": "Hot Pink", "rose_pink": "Rose Pink",
-            "magenta": "Magenta", "royal_purple": "Royal Purple", "indigo_blue": "Indigo Blue",
-            "midnight_blue": "Midnight Blue", "teal": "Teal", "ocean_blue": "Ocean Blue", "steel_blue": "Steel Blue",
-            "slate_gray": "Slate Gray", "cyber_yellow": "Cyber Yellow", "neon_green": "Neon Green",
-            "violet_glow": "Violet Glow", "turquoise_glow": "Turquoise Glow"
+            "crimson_red": "Crimson Red", "coral_red": "Coral Red", "deep_orange": "Deep Orange", 
+            "golden_orange": "Golden Orange", "amber_yellow": "Amber Yellow", "cyber_yellow": "Cyber Yellow",
+            "lime_green": "Lime Green", "neon_green": "Neon Green", "mint_green": "Mint Green", "emerald_green": "Emerald Green",
+            "turquoise_glow": "Turquoise Glow", "neon_cyan": "Neon Cyan", "teal": "Teal",
+            "electric_blue": "Electric Blue", "ocean_blue": "Ocean Blue", "steel_blue": "Steel Blue", 
+            "indigo_blue": "Indigo Blue", "midnight_blue": "Midnight Blue",
+            "royal_purple": "Royal Purple", "violet_glow": "Violet Glow", "magenta": "Magenta",
+            "hot_pink": "Hot Pink", "rose_pink": "Rose Pink", "slate_gray": "Slate Gray"
         }
     },
     "Turkish": {
-        "title": "Modern YouTube İndirici",
+        "title": "Modern YouTube İndirici by Legendnoobe",
         "settings_title": "Uygulama Ayarları",
         "download_loc": "İndirme Konumu",
         "browse": "Gözat",
@@ -85,14 +85,14 @@ TRANSLATIONS = {
         "dark": "Koyu",
         "light": "Açık",
         "colors": {
-            "electric_blue": "Elektrik Mavisi", "neon_cyan": "Neon Camgöbeği", "emerald_green": "Zümrüt Yeşili",
-            "mint_green": "Nane Yeşili", "lime_green": "Limon Yeşili", "amber_yellow": "Kehribar Sarısı",
-            "golden_orange": "Altın Turuncu", "deep_orange": "Koyu Turuncu", "coral_red": "Mercan Kırmızısı",
-            "crimson_red": "Kızıl Kırmızı", "hot_pink": "Sıcak Pembe", "rose_pink": "Gül Pembesi",
-            "magenta": "Eflatun", "royal_purple": "Kraliyet Moru", "indigo_blue": "Çivit Mavisi",
-            "midnight_blue": "Gece Mavisi", "teal": "Çamurcun", "ocean_blue": "Okyanus Mavisi", "steel_blue": "Çelik Mavisi",
-            "slate_gray": "Arduvaz Grisi", "cyber_yellow": "Siber Sarı", "neon_green": "Neon Yeşil",
-            "violet_glow": "Menekşe Parıltısı", "turquoise_glow": "Turkuaz Parıltısı"
+            "crimson_red": "Kızıl Kırmızı", "coral_red": "Mercan Kırmızısı", "deep_orange": "Koyu Turuncu",
+            "golden_orange": "Altın Turuncu", "amber_yellow": "Kehribar Sarısı", "cyber_yellow": "Siber Sarı",
+            "lime_green": "Limon Yeşili", "neon_green": "Neon Yeşil", "mint_green": "Nane Yeşili", "emerald_green": "Zümrüt Yeşili",
+            "turquoise_glow": "Turkuaz Parıltısı", "neon_cyan": "Neon Camgöbeği", "teal": "Çamurcun",
+            "electric_blue": "Elektrik Mavisi", "ocean_blue": "Okyanus Mavisi", "steel_blue": "Çelik Mavisi",
+            "indigo_blue": "Çivit Mavisi", "midnight_blue": "Gece Mavisi",
+            "royal_purple": "Kraliyet Moru", "violet_glow": "Menekşe Parıltısı", "magenta": "Eflatun",
+            "hot_pink": "Sıcak Pembe", "rose_pink": "Gül Pembesi", "slate_gray": "Arduvaz Grisi"
         }
     }
 }
@@ -307,7 +307,7 @@ class SettingsPanel(ctk.CTkFrame):
 # Localization Dictionary
 TRANSLATIONS = {
     "English": {
-        "title": "Modern YouTube Downloader",
+        "title": "Modern YouTube Downloader by Legendnoobe",
         "settings_title": "Application Settings",
         "download_loc": "Download Location",
         "browse": "Browse",
@@ -329,22 +329,21 @@ TRANSLATIONS = {
         "language": "Language",
         "video": "Video",
         "audio": "Audio",
-        "system": "System",
         "dark": "Dark",
         "light": "Light",
         "colors": {
-            "electric_blue": "Electric Blue", "neon_cyan": "Neon Cyan", "emerald_green": "Emerald Green",
-            "mint_green": "Mint Green", "lime_green": "Lime Green", "amber_yellow": "Amber Yellow",
-            "golden_orange": "Golden Orange", "deep_orange": "Deep Orange", "coral_red": "Coral Red",
-            "crimson_red": "Crimson Red", "hot_pink": "Hot Pink", "rose_pink": "Rose Pink",
-            "magenta": "Magenta", "royal_purple": "Royal Purple", "indigo_blue": "Indigo Blue",
-            "midnight_blue": "Midnight Blue", "teal": "Teal", "ocean_blue": "Ocean Blue", "steel_blue": "Steel Blue",
-            "slate_gray": "Slate Gray", "cyber_yellow": "Cyber Yellow", "neon_green": "Neon Green",
-            "violet_glow": "Violet Glow", "turquoise_glow": "Turquoise Glow"
+            "crimson_red": "Crimson Red", "coral_red": "Coral Red", "deep_orange": "Deep Orange", 
+            "golden_orange": "Golden Orange", "amber_yellow": "Amber Yellow", "cyber_yellow": "Cyber Yellow",
+            "lime_green": "Lime Green", "neon_green": "Neon Green", "mint_green": "Mint Green", "emerald_green": "Emerald Green",
+            "turquoise_glow": "Turquoise Glow", "neon_cyan": "Neon Cyan", "teal": "Teal",
+            "electric_blue": "Electric Blue", "ocean_blue": "Ocean Blue", "steel_blue": "Steel Blue", 
+            "indigo_blue": "Indigo Blue", "midnight_blue": "Midnight Blue",
+            "royal_purple": "Royal Purple", "violet_glow": "Violet Glow", "magenta": "Magenta",
+            "hot_pink": "Hot Pink", "rose_pink": "Rose Pink", "slate_gray": "Slate Gray"
         }
     },
     "Turkish": {
-        "title": "Modern YouTube İndirici",
+        "title": "Modern YouTube İndirici by Legendnoobe",
         "settings_title": "Uygulama Ayarları",
         "download_loc": "İndirme Konumu",
         "browse": "Gözat",
@@ -366,18 +365,17 @@ TRANSLATIONS = {
         "language": "Dil",
         "video": "Video",
         "audio": "Ses",
-        "system": "Sistem",
         "dark": "Koyu",
         "light": "Açık",
         "colors": {
-            "electric_blue": "Elektrik Mavisi", "neon_cyan": "Neon Camgöbeği", "emerald_green": "Zümrüt Yeşili",
-            "mint_green": "Nane Yeşili", "lime_green": "Limon Yeşili", "amber_yellow": "Kehribar Sarısı",
-            "golden_orange": "Altın Turuncu", "deep_orange": "Koyu Turuncu", "coral_red": "Mercan Kırmızısı",
-            "crimson_red": "Kızıl Kırmızı", "hot_pink": "Sıcak Pembe", "rose_pink": "Gül Pembesi",
-            "magenta": "Eflatun", "royal_purple": "Kraliyet Moru", "indigo_blue": "Çivit Mavisi",
-            "midnight_blue": "Gece Mavisi", "teal": "Çamurcun", "ocean_blue": "Okyanus Mavisi", "steel_blue": "Çelik Mavisi",
-            "slate_gray": "Arduvaz Grisi", "cyber_yellow": "Siber Sarı", "neon_green": "Neon Yeşil",
-            "violet_glow": "Menekşe Parıltısı", "turquoise_glow": "Turkuaz Parıltısı"
+            "crimson_red": "Kızıl Kırmızı", "coral_red": "Mercan Kırmızısı", "deep_orange": "Koyu Turuncu",
+            "golden_orange": "Altın Turuncu", "amber_yellow": "Kehribar Sarısı", "cyber_yellow": "Siber Sarı",
+            "lime_green": "Limon Yeşili", "neon_green": "Neon Yeşil", "mint_green": "Nane Yeşili", "emerald_green": "Zümrüt Yeşili",
+            "turquoise_glow": "Turkuaz Parıltısı", "neon_cyan": "Neon Camgöbeği", "teal": "Çamurcun",
+            "electric_blue": "Elektrik Mavisi", "ocean_blue": "Okyanus Mavisi", "steel_blue": "Çelik Mavisi",
+            "indigo_blue": "Çivit Mavisi", "midnight_blue": "Gece Mavisi",
+            "royal_purple": "Kraliyet Moru", "violet_glow": "Menekşe Parıltısı", "magenta": "Eflatun",
+            "hot_pink": "Sıcak Pembe", "rose_pink": "Gül Pembesi", "slate_gray": "Arduvaz Grisi"
         }
     }
 }
@@ -416,9 +414,13 @@ class SettingsManager:
             except:
                 data = self.defaults.copy()
         
+        # Migrations
         ac = data.get("accent_color", "")
         if ac == "red": data["accent_color"] = "crimson_red"
         elif ac == "orange": data["accent_color"] = "golden_orange"
+        
+        if data.get("theme_mode") == "System":
+            data["theme_mode"] = "Dark"
         
         return data
 
@@ -450,7 +452,6 @@ class SettingsPanel(ctk.CTkFrame):
             
             # Map for themes
             self.theme_map = {
-                "System": self.tr["system"],
                 "Dark": self.tr["dark"],
                 "Light": self.tr["light"]
             }
@@ -743,9 +744,24 @@ class App(ctk.CTk):
         self.add_btn = ctk.CTkButton(input_frame, text="+", width=40, height=35, command=self.fetch_info_thread)
         self.add_btn.pack(side="right", padx=(5, 10), pady=10)
 
-        # --- Queue ---
-        self.scroll_frame = ctk.CTkScrollableFrame(self.main_content, label_text=self.tr["queue_label"])
-        self.scroll_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
+        # --- Tabs ---
+        self.tabview = ctk.CTkTabview(self.main_content)
+        self.tabview.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
+        
+        self.tab_queue = self.tabview.add(self.tr.get("queue_label", "Queue"))
+        self.tab_completed = self.tabview.add(self.tr.get("completed", "Completed"))
+        
+        # Queue Tab Layout
+        self.tab_queue.grid_columnconfigure(0, weight=1)
+        self.tab_queue.grid_rowconfigure(0, weight=1)
+        self.scroll_queue = ctk.CTkScrollableFrame(self.tab_queue, label_text=None, fg_color="transparent")
+        self.scroll_queue.grid(row=0, column=0, sticky="nsew")
+        
+        # Completed Tab Layout
+        self.tab_completed.grid_columnconfigure(0, weight=1)
+        self.tab_completed.grid_rowconfigure(0, weight=1)
+        self.scroll_completed = ctk.CTkScrollableFrame(self.tab_completed, label_text=None, fg_color="transparent")
+        self.scroll_completed.grid(row=0, column=0, sticky="nsew")
 
         # --- Footer ---
         footer = ctk.CTkFrame(self.main_content, fg_color="transparent")
@@ -805,7 +821,7 @@ class App(ctk.CTk):
             print(f"Error: {info['error']}")
             return
 
-        item = VideoItem(self.scroll_frame, info, self.settings, self.remove_item, self.tr)
+        item = VideoItem(self.scroll_queue, info, self.settings, self.remove_item, self.tr)
         item.pack(fill="x", padx=5, pady=5)
         self.queue_items.append(item)
 
@@ -846,21 +862,59 @@ class App(ctk.CTk):
             res = self.downloader.download_video(url, opts, progress_callback=progress_hook)
             
             if res == "Success":
-                 self.after(0, lambda i=item: i.status_label.configure(text=self.tr["completed"], text_color="green"))
+                 self.after(0, lambda i=item: self.move_to_completed(i))
             else:
                  self.after(0, lambda i=item: i.status_label.configure(text=self.tr["failed"], text_color="red"))
 
         self.is_downloading = False
         self.after(0, lambda: self.start_btn.configure(state="normal", text=self.tr["start_all"]))
         
-        # Check if open folder enabled
+        # Check if open folder enabled (opens default path)
         if self.settings.get("open_folder_after"):
-             self.after(0, self.open_download_folder)
+             path = self.settings.get("download_path")
+             self.after(0, lambda: self.open_download_folder(path))
 
-    def open_download_folder(self):
-        path = self.settings.get("download_path")
-        if os.path.exists(path):
-            os.startfile(path)
+    def move_to_completed(self, item):
+        item.status_label.configure(text=self.tr["completed"], text_color="green")
+        item.progress.grid_remove() 
+        
+        if item in self.queue_items:
+            self.queue_items.remove(item)
+            
+        item.pack_forget()
+        item.destroy()
+        
+        # Create new item in completed tab
+        # We need to ensure we pass correct args. 
+        # Using a slightly modified VideoItem or just configuring it?
+        # Simpler to create new instance.
+        new_item = VideoItem(self.scroll_completed, item.info, self.settings, lambda i: i.destroy(), self.tr)
+        new_item.pack(fill="x", padx=5, pady=5)
+        new_item.status_label.configure(text=self.tr["completed"], text_color="green")
+        new_item.progress.grid_remove()
+        
+        # Modify UI
+        new_item.type_menu.grid_remove()
+        new_item.quality_menu.grid_remove()
+        new_item.remove_btn.configure(text="X", width=30, fg_color="red", hover_color="darkred", command=lambda: new_item.destroy())
+        
+        # Open Folder Button
+        path = item.get_options()['output_path']
+        open_btn = ctk.CTkButton(new_item, text="📂", width=40, height=20, fg_color="gray", command=lambda: self.open_download_folder(path))
+        open_btn.grid(row=1, column=1, padx=5, pady=2, sticky="w")
+
+    def open_download_folder(self, path=None):
+        if not path: path = self.settings.get("download_path")
+        if hasattr(os, 'startfile'):
+            try: os.startfile(path)
+            except: pass
+        elif sys.platform == 'darwin':
+            try: subprocess.call(['open', path])
+            except: pass
+        else:
+            try: subprocess.call(['xdg-open', path])
+            except: pass
+
 
 if __name__ == "__main__":
     while True:
