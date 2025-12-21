@@ -196,10 +196,14 @@ class App(ctk.CTk):
         threading.Thread(target=self.process_queue).start()
 
     def process_queue(self):
-        for item in self.queue_items:
+        # Iterate over a copy of the list to allow safe removal modification during iteration
+        items_to_process = list(self.queue_items)
+        for item in items_to_process:
             # Check if item is valid/not destroyed before starting
             try:
                 if not item.winfo_exists(): continue
+                # Re-check if it's still in the main list (might have been removed individually)
+                if item not in self.queue_items: continue
                 if item.status_label.cget("text") == self.tr["completed"]: continue
             except: continue
             

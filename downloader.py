@@ -37,19 +37,35 @@ def make_unique(path):
     return new_path
 
 class UniqueYoutubeDL(yt_dlp.YoutubeDL):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._filename_cache = {} # {original_base_path: unique_base_path}
+
     def prepare_filename(self, info_dict, *args, **kwargs):
-        # robustly call super
         try:
             path = super().prepare_filename(info_dict, *args, **kwargs)
-            return make_unique(path)
+            
+            # Split to get base
+            base, ext = os.path.splitext(path)
+            
+            # Check cache first to ensure consistency between video/audio parts
+            if base in self._filename_cache:
+                return f"{self._filename_cache[base]}{ext}"
+            
+            # Determine unique name
+            unique_path = make_unique(path)
+            unique_base, _ = os.path.splitext(unique_path)
+            
+            # Cache the decision
+            self._filename_cache[base] = unique_base
+            
+            return unique_path
         except Exception:
-            # Fallback if signature mismatch or other error
+            # Fallback
             try:
-                # Try simple call
                 path = super().prepare_filename(info_dict)
                 return make_unique(path)
             except:
-                # Ultimate fallback
                 filename = info_dict.get('_filename')
                 if not filename:
                     title = info_dict.get('title', 'video')
@@ -96,26 +112,29 @@ class YoutubeDownloader:
 
     def download_video(self, url, options, progress_callback=None):
         """
-        Downloads the video with specified options.
+        Downloads the video to a temp folder, merges it, and moves to final destination.
         """
-        output_path = options.get('output_path', os.getcwd())
+        final_output_path = options.get('output_path', os.getcwd())
         
+        # Create a temp directory inside the final output path to avoid cross-drive move issues
+        temp_dir = os.path.join(final_output_path, ".temp_dl")
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+
         # Base options
-        # NOTE: We use UniqueYoutubeDL so we don't need manual duplicate checks here.
-        
         ydl_opts = {
-            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
+            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_callback] if progress_callback else [],
             'noplaylist': True, 
             'ffmpeg_location': self.ffmpeg_location,
             'ignoreerrors': True,
-            'overwrites': True, # We handle uniqueness via filename change
+            'overwrites': True, 
         }
 
         if options.get('is_playlist') or 'list=' in url:
             # Force playlist mode by explicitly using the playlist URL
             try:
-                if 'list=' in url:
+                if 'list=' in url and 'youtube.com' in url: # Re-added simple safety check
                     from urllib.parse import parse_qs, urlparse
                     parsed = urlparse(url)
                     qs = parse_qs(parsed.query)
@@ -125,10 +144,10 @@ class YoutubeDownloader:
             except: pass
 
             ydl_opts['noplaylist'] = False
-            # Playlist subfolder structure: output_path/PlaylistName/
-            ydl_opts['outtmpl'] = os.path.join(output_path, '%(playlist_title)s', '%(title)s.%(ext)s')
+            # Playlist subfolder structure in temp: temp/.temp_dl/PlaylistName/
+            ydl_opts['outtmpl'] = os.path.join(temp_dir, '%(playlist_title)s', '%(title)s.%(ext)s')
 
-        # Format selection
+        # Format selection (Same as before)
         if options.get('format_type') == 'audio':
             ydl_opts['format'] = 'bestaudio/best'
             ydl_opts['postprocessors'] = [{
@@ -146,14 +165,12 @@ class YoutubeDownloader:
             else:
                  height = quality.split('p')[0]
                  if height.isdigit():
-                     # Fallback to general best if specific height combo fails
                      ydl_opts['format'] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
                  else:
                      ydl_opts['format'] = f"bestvideo+bestaudio/best"
 
             ydl_opts['merge_output_format'] = ext
             
-            # Opus codec'ini AAC'ye dönüştür (basit oynatıcılarda uyumluluk için)
             ydl_opts['postprocessors'] = [{
                 'key': 'FFmpegVideoRemuxer',
                 'preferedformat': ext,
@@ -161,9 +178,44 @@ class YoutubeDownloader:
             ydl_opts['postprocessor_args'] = ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
 
         try:
-            # Use UniqueYoutubeDL to enforce unique filenames
+            # Capture the filenames created to move them later
+            # Since yt-dlp doesn't return the list easily without huge overhead,
+            # we can rely on moving everything from temp_dir that isn't a partial file.
+            
             with UniqueYoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
+            
+            # Move files from temp to final
+            # 1. Handle Playlist Folders
+            for item in os.listdir(temp_dir):
+                s = os.path.join(temp_dir, item)
+                d = os.path.join(final_output_path, item)
+                
+                # If d exists and is file, make unique? 
+                # Or simplistic move? 
+                
+                if os.path.isdir(s):
+                    # It's a playlist folder, move content or folder?
+                    # Move entire folder. If exists, merge? 
+                    # shutil.move fails if exists.
+                    if not os.path.exists(d):
+                        shutil.move(s, d)
+                    else:
+                        # Move inner files
+                        for inner in os.listdir(s):
+                            shutil.move(os.path.join(s, inner), os.path.join(d, inner))
+                        shutil.rmtree(s) # delete empty folder
+                else:
+                    # It's a video file
+                    if not item.endswith(".part") and not item.endswith(".ytdl"):
+                        # Ensure unique name in destination
+                         final_name = make_unique(d)
+                         shutil.move(s, final_name)
+            
+            # Cleanup temp dir if empty
+            try: os.rmdir(temp_dir)
+            except: pass # might not be empty if failed files
+            
             return "Success"
         except Exception as e:
             return str(e)
