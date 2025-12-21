@@ -15,13 +15,22 @@ class SettingsManager:
         
         self.defaults = {
             "download_path": os.path.join(os.path.expanduser("~"), "Downloads"),
-            "default_type": "Video", # Video, Audio
-            "default_format": "mp4", # mp4, mkv / mp3
-            "default_quality": "best",
             "open_folder_after": True,
-            "theme_mode": "Dark", # System, Dark, Light
+            "theme_mode": "Dark", 
             "accent_color": "crimson_red", 
-            "language": "English"
+            "language": "English",
+            
+            # Separated Defaults
+            "default_add_type": "Video", # Video, Audio, Thumbnail
+            
+            "video_format": "mp4",
+            "video_quality": "best",
+            
+            "audio_format": "mp3",
+            "audio_quality": "192",
+            
+            "thumb_format": "jpg",
+            "thumb_quality": "Original"
         }
         self.settings = self.load_settings()
 
@@ -42,6 +51,17 @@ class SettingsManager:
         
         if data.get("theme_mode") == "System":
             data["theme_mode"] = "Dark"
+            
+        # Migrate old format keys to new separated keys if separate ones are missing
+        if "default_type" in data and "default_add_type" not in data:
+            data["default_add_type"] = data["default_type"]
+            
+        # We can't easily map old single format/quality to 3 separate ones perfectly, 
+        # but we can try to preserve user intent if they had a weird default.
+        # Actually it's safer to ensure the new keys exist with defaults if they don't.
+        for k, v in self.defaults.items():
+            if k not in data:
+                data[k] = v
         
         return data
 

@@ -117,7 +117,7 @@ class YoutubeDownloader:
         final_output_path = options.get('output_path', os.getcwd())
         
         # Create a temp directory inside the final output path to avoid cross-drive move issues
-        temp_dir = os.path.join(final_output_path, ".temp_dl")
+        temp_dir = os.path.join(final_output_path, "YMVD.temp_dl")
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
 
@@ -147,7 +147,7 @@ class YoutubeDownloader:
             # Playlist subfolder structure in temp: temp/.temp_dl/PlaylistName/
             ydl_opts['outtmpl'] = os.path.join(temp_dir, '%(playlist_title)s', '%(title)s.%(ext)s')
 
-        # Format selection (Same as before)
+        # Format selection
         if options.get('format_type') == 'audio':
             ydl_opts['format'] = 'bestaudio/best'
             ydl_opts['postprocessors'] = [{
@@ -155,6 +155,79 @@ class YoutubeDownloader:
                 'preferredcodec': options.get('ext', 'mp3'),
                 'preferredquality': options.get('quality', '192'),
             }]
+        elif options.get('format_type') == 'thumbnail':
+            # Manual thumbnail download and processing
+            try:
+                # 1. Get info to find thumbnail URL
+                # We often already have info, but to be safe or if direct download called:
+                # Actually, this method is called inside a flow.
+                # Use yt-dlp to extract info WITHOUT downloading anything first
+                
+                # If we are here, 'url' is the video URL.
+                with yt_dlp.YoutubeDL({'quiet':True, 'skip_download':True}) as ydl:
+                     info = ydl.extract_info(url, download=False)
+                
+                thumb_url = info.get('thumbnail')
+                title = info.get('title', 'thumbnail')
+                
+                if not thumb_url:
+                    return "Error: No thumbnail found"
+                
+                # 2. Download Image Data
+                import urllib.request
+                from PIL import Image
+                import io
+                
+                # User selected format and quality
+                target_ext = options.get('ext', 'jpg')
+                quality_setting = options.get('quality', 'Original') # Original, 1080p, 720p...
+                
+                # Download
+                req = urllib.request.Request(thumb_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response:
+                    img_data = response.read()
+                
+                img = Image.open(io.BytesIO(img_data))
+                
+                # 3. Resize if needed
+                if quality_setting != "Original":
+                    # Parse target height
+                    try:
+                        target_h = int(quality_setting.replace('p', ''))
+                        # Calculate width to maintain aspect ratio
+                        # w / h = ar  => w = ar * h
+                        aspect_ratio = img.width / img.height
+                        target_w = int(aspect_ratio * target_h)
+                        
+                        # High quality resize
+                        img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                    except:
+                        pass # Fail silently to Original
+                
+                # 4. Save
+                # Handle unique filename manually since we are bypassing yt-dlp download
+                # output_path key in options includes the path provided by user.
+                # wait, ydl_opts below sets outtmpl.
+                # We need to respect the directory structure (temp dir).
+                
+                # Re-using the temp_dir logic from the function scope?
+                # The function variables 'temp_dir' and 'final_output_path' are available if we are inside the method.
+                # Yes, we are replacing the elif block inside 'download_video'.
+                
+                filename_base = "".join([c for c in title if c.isalnum() or c in (' ', '-', '_')]).rstrip()
+                save_path = os.path.join(temp_dir, f"{filename_base}.{target_ext}")
+                
+                # Convert mode if needed (e.g. RGBA to RGB for jpg)
+                if target_ext in ['jpg', 'jpeg'] and img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                
+                img.save(save_path)
+                
+                # Do NOT return "Success" here; let it fall through to the move logic below
+                # return "Success" 
+                
+            except Exception as e:
+                return f"Thumbnail Error: {str(e)}"
         else:
             # Video
             quality = options.get('quality', 'best')
@@ -182,8 +255,9 @@ class YoutubeDownloader:
             # Since yt-dlp doesn't return the list easily without huge overhead,
             # we can rely on moving everything from temp_dir that isn't a partial file.
             
-            with UniqueYoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            if options.get('format_type') != 'thumbnail':
+                with UniqueYoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
             
             # Move files from temp to final
             # 1. Handle Playlist Folders

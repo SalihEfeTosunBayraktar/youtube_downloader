@@ -76,32 +76,107 @@ class SettingsPanel(ctk.CTkFrame):
         self.color_menu = ctk.CTkOptionMenu(self.color_container, values=self.color_display_values, variable=self.color_var)
         self.color_menu.pack(fill="x", padx=10, pady=5)
         
-        # 4. Defaults
-        self.add_section(content, self.tr["def_options"])
-        self.type_var = ctk.StringVar(value=self.manager.get("default_type"))
-        ctk.CTkOptionMenu(content, values=[self.tr["video"], self.tr["audio"]], variable=self.type_var, command=self.update_formats).pack(fill="x", padx=10, pady=5)
+        # 4. Defaults Configuration
+        self.add_section(content, self.tr.get("def_options", "Default Options"))
+        
+        # 4.1 Start Type
+        ctk.CTkLabel(content, text=self.tr.get("def_start_type", "Start Type"), font=("Arial", 11, "bold")).pack(anchor="w", padx=20, pady=(5,0))
+        self.add_type_var = ctk.StringVar(value=self.manager.get("default_add_type"))
+        # Using localized values for display, mapping back on save
+        self.type_display_map = {
+            "Video": self.tr["video"],
+            "Audio": self.tr["audio"],
+            "Thumbnail": self.tr["thumbnail"]
+        }
+        self.type_value_map = {v: k for k, v in self.type_display_map.items()}
+        
+        current_add_type = self.manager.get("default_add_type")
+        display_add_type = self.type_display_map.get(current_add_type, self.tr["video"])
+        self.add_type_var.set(display_add_type)
+        
+        ctk.CTkOptionMenu(content, values=list(self.type_display_map.values()), variable=self.add_type_var).pack(fill="x", padx=20, pady=5)
 
-        self.format_var = ctk.StringVar(value=self.manager.get("default_format"))
-        self.format_menu = ctk.CTkOptionMenu(content, values=["mp4", "mkv"], variable=self.format_var)
-        self.format_menu.pack(fill="x", padx=10, pady=5)
+        # 4.2 Video Defaults
+        self.add_subsection(content, self.tr.get("def_video", "Video Defaults"))
+        self.vid_fmt_var = ctk.StringVar(value=self.manager.get("video_format"))
+        self.vid_qual_var = ctk.StringVar(value=self.manager.get("video_quality"))
+        
+        vf_frame = ctk.CTkFrame(content, fg_color="transparent")
+        vf_frame.pack(fill="x", padx=20, pady=2)
+        ctk.CTkOptionMenu(vf_frame, values=["mp4", "mkv", "webm"], variable=self.vid_fmt_var, width=100).pack(side="left", fill="x", expand=True, padx=(0,5))
+        ctk.CTkOptionMenu(vf_frame, values=["best", "4320p (8K)", "2160p (4K)", "1440p", "1080p", "720p", "480p", "360p", "240p"], variable=self.vid_qual_var, width=100).pack(side="right", fill="x", expand=True, padx=(5,0))
 
-        self.quality_var = ctk.StringVar(value=self.manager.get("default_quality"))
-        self.quality_menu = ctk.CTkOptionMenu(content, values=["best", "1080p"], variable=self.quality_var)
-        self.quality_menu.pack(fill="x", padx=10, pady=5)
+        # 4.3 Audio Defaults
+        self.add_subsection(content, self.tr.get("def_audio", "Audio Defaults"))
+        self.aud_fmt_var = ctk.StringVar(value=self.manager.get("audio_format"))
+        self.aud_qual_var = ctk.StringVar(value=self.manager.get("audio_quality"))
+        
+        af_frame = ctk.CTkFrame(content, fg_color="transparent")
+        af_frame.pack(fill="x", padx=20, pady=2)
+        ctk.CTkOptionMenu(af_frame, values=["mp3", "m4a", "wav"], variable=self.aud_fmt_var, width=100).pack(side="left", fill="x", expand=True, padx=(0,5))
+        ctk.CTkOptionMenu(af_frame, values=["320", "256", "192", "160", "128", "96", "64"], variable=self.aud_qual_var, width=100).pack(side="right", fill="x", expand=True, padx=(5,0))
+
+        # 4.4 Thumbnail Defaults
+        self.add_subsection(content, self.tr.get("def_thumb", "Thumbnail Defaults"))
+        self.thumb_fmt_var = ctk.StringVar(value=self.manager.get("thumb_format"))
+        self.thumb_qual_var = ctk.StringVar(value=self.manager.get("thumb_quality"))
+
+        tf_frame = ctk.CTkFrame(content, fg_color="transparent")
+        tf_frame.pack(fill="x", padx=20, pady=2)
+        ctk.CTkOptionMenu(tf_frame, values=["jpg", "png", "webp"], variable=self.thumb_fmt_var, width=100).pack(side="left", fill="x", expand=True, padx=(0,5))
+        ctk.CTkOptionMenu(tf_frame, values=["Original", "1080p", "720p", "480p"], variable=self.thumb_qual_var, width=100).pack(side="right", fill="x", expand=True, padx=(5,0))
 
         # 5. Open Folder
         self.open_folder_var = ctk.BooleanVar(value=self.manager.get("open_folder_after"))
-        ctk.CTkCheckBox(content, text=self.tr["open_folder"], variable=self.open_folder_var).pack(pady=10, anchor="w", padx=10)
+        ctk.CTkCheckBox(content, text=self.tr["open_folder"], variable=self.open_folder_var).pack(pady=20, anchor="w", padx=10)
 
-        # Save Button
-        ctk.CTkButton(self, text=self.tr["save"], height=40, font=ctk.CTkFont(weight="bold"), command=self.save_settings).pack(pady=20, padx=20, fill="x")
+        # Buttons
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(pady=20, padx=20, fill="x")
+        
+        ctk.CTkButton(btn_frame, text=self.tr["save"], height=40, font=ctk.CTkFont(weight="bold"), command=self.save_settings).pack(side="right", fill="x", expand=True, padx=(5,0))
+        ctk.CTkButton(btn_frame, text=self.tr.get("reset_defaults", "Reset"), height=40, fg_color="gray", hover_color="gray30", command=self.reset_defaults).pack(side="left", fill="x", expand=True, padx=(0,5))
         
         self.on_theme_change(self.theme_var.get())
-        self.update_formats(self.type_var.get())
+
+    def reset_defaults(self):
+        # Reset UI vars to defaults defined in manager
+        defaults = self.manager.defaults
+        self.lang_var.set(defaults["language"])
+        
+        self.path_entry.configure(state="normal")
+        self.path_entry.delete(0, "end")
+        self.path_entry.insert(0, defaults["download_path"])
+        self.path_entry.configure(state="disabled")
+        
+        self.theme_var.set(self.theme_map.get(defaults["theme_mode"], defaults["theme_mode"]))
+        self.color_var.set(self.tr["colors"].get(defaults["accent_color"], "Crimson Red"))
+        
+        # Reset new structure
+        display_add = self.type_display_map.get(defaults["default_add_type"], self.tr["video"])
+        self.add_type_var.set(display_add)
+        
+        self.vid_fmt_var.set(defaults["video_format"])
+        self.vid_qual_var.set(defaults["video_quality"])
+        self.aud_fmt_var.set(defaults["audio_format"])
+        self.aud_qual_var.set(defaults["audio_quality"])
+        self.thumb_fmt_var.set(defaults["thumb_format"])
+        self.thumb_qual_var.set(defaults["thumb_quality"])
+        
+        self.open_folder_var.set(defaults["open_folder_after"])
+        
+        self.on_theme_change(self.theme_var.get())
+        
+        # Save and Reload immediately
+        self.save_settings() 
+        self.reload_callback()
 
     def add_section(self, parent, text):
         ctk.CTkLabel(parent, text=text, font=("Arial", 12, "bold")).pack(anchor="w", padx=10, pady=(15,0))
 
+    def add_subsection(self, parent, text):
+        ctk.CTkLabel(parent, text=text, font=("Arial", 11)).pack(anchor="w", padx=20, pady=(10,0))
+        
     def on_theme_change(self, mode_display):
         # Check internal value
         internal = self.theme_map_rev.get(mode_display, "Dark")
@@ -109,18 +184,6 @@ class SettingsPanel(ctk.CTkFrame):
             self.color_menu.pack_forget()
         else: 
             self.color_menu.pack(fill="x", padx=10, pady=5)
-
-    def update_formats(self, choice):
-        if choice == self.tr["audio"] or choice == "Audio":
-            self.format_menu.configure(values=["mp3", "m4a", "wav"])
-            self.quality_menu.configure(values=["320", "256", "192", "160", "128", "96", "64"])
-            if self.quality_var.get() not in ["320", "256", "192", "160", "128", "96", "64"]: self.quality_var.set("192")
-            if self.format_var.get() not in ["mp3", "m4a", "wav"]: self.format_var.set("mp3")
-        else:
-            self.format_menu.configure(values=["mp4", "mkv", "webm"])
-            self.quality_menu.configure(values=["best", "4320p (8K)", "2160p (4K)", "1440p", "1080p", "720p", "480p", "360p", "240p"])
-            if self.quality_var.get() not in ["best", "4320p (8K)", "2160p (4K)", "1440p", "1080p", "720p", "480p", "360p", "240p"]: self.quality_var.set("best")
-            if self.format_var.get() not in ["mp4", "mkv", "webm"]: self.format_var.set("mp4")
 
     def browse_path(self):
         path = filedialog.askdirectory()
@@ -137,7 +200,6 @@ class SettingsPanel(ctk.CTkFrame):
         new_theme = self.theme_map_rev.get(new_theme_display, "Dark")
         
         new_color_display = self.color_var.get()
-        # Find key from display value
         new_color = "crimson_red"
         for k, v in self.tr["colors"].items():
             if v == new_color_display:
@@ -145,16 +207,25 @@ class SettingsPanel(ctk.CTkFrame):
                 break
         
         new_lang = self.lang_var.get()
-        default_type = "Audio" if self.type_var.get() == self.tr.get("audio") else "Video"
-
+        
+        # Save Basic
         self.manager.set("download_path", self.path_entry.get())
-        self.manager.set("default_type", default_type)
-        self.manager.set("default_format", self.format_var.get())
-        self.manager.set("default_quality", self.quality_var.get())
         self.manager.set("open_folder_after", self.open_folder_var.get())
         self.manager.set("theme_mode", new_theme)
         self.manager.set("accent_color", new_color)
         self.manager.set("language", new_lang)
+        
+        # Save Advanced Defaults
+        display_add_type = self.add_type_var.get()
+        internal_add_type = self.type_value_map.get(display_add_type, "Video")
+        self.manager.set("default_add_type", internal_add_type)
+        
+        self.manager.set("video_format", self.vid_fmt_var.get())
+        self.manager.set("video_quality", self.vid_qual_var.get())
+        self.manager.set("audio_format", self.aud_fmt_var.get())
+        self.manager.set("audio_quality", self.aud_qual_var.get())
+        self.manager.set("thumb_format", self.thumb_fmt_var.get())
+        self.manager.set("thumb_quality", self.thumb_qual_var.get())
         
         self.parent.toggle_settings() # Close panel
         if old_theme != new_theme or old_color != new_color or old_lang != new_lang:
