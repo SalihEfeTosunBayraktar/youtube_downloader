@@ -14,7 +14,7 @@ class App(ctk.CTk):
 
         self.title("Modern YouTube Downloader")
         self.geometry("900x600")
-        self.min_size(500, 600)
+        self.minsize(500, 600)
 
         # Helper
         self.downloader = YoutubeDownloader()
@@ -29,11 +29,16 @@ class App(ctk.CTk):
         self.top_frame.grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
         self.top_frame.grid_columnconfigure(0, weight=1)
 
-        self.url_entry = ctk.CTkEntry(self.top_frame, placeholder_text="Paste YouTube Link Here...")
+        self.url_var = ctk.StringVar()
+        self.url_var.trace_add("write", self.on_url_change)
+        
+        self.url_entry = ctk.CTkEntry(self.top_frame, placeholder_text="Paste YouTube Link Here...", textvariable=self.url_var)
         self.url_entry.grid(row=0, column=0, padx=(10, 10), pady=10, sticky="ew")
         
-        self.fetch_btn = ctk.CTkButton(self.top_frame, text="Fetch", width=100, command=self.fetch_info_thread)
-        self.fetch_btn.grid(row=0, column=1, padx=(0, 10), pady=10)
+        # self.fetch_btn = ctk.CTkButton(self.top_frame, text="Fetch", width=100, command=self.fetch_info_thread)
+        # self.fetch_btn.grid(row=0, column=1, padx=(0, 10), pady=10)
+        
+        self.fetch_timer = None
 
         # --- Content Area ---
         self.content_frame = ctk.CTkFrame(self)
@@ -99,11 +104,25 @@ class App(ctk.CTk):
             self.quality_menu.configure(values=["best", "1080p", "720p", "480p"])
             self.quality_var.set("best")
 
+    def on_url_change(self, *args):
+        if self.fetch_timer:
+            self.after_cancel(self.fetch_timer)
+        self.fetch_timer = self.after(800, self.check_and_fetch)
+
+    def check_and_fetch(self):
+        url = self.url_var.get().strip()
+        if not url: return
+        
+        # Basic validation to avoid useless fetch attempts
+        if "youtube.com" in url or "youtu.be" in url:
+            # Avoid re-fetching same URL if already valid (optional logic could go here)
+            self.fetch_info_thread()
+
     def fetch_info_thread(self):
-        url = self.url_entry.get()
+        url = self.url_var.get()
         if not url:
             return
-        self.fetch_btn.configure(state="disabled")
+        # self.fetch_btn.configure(state="disabled")
         self.status_label.configure(text="Fetching metadata...")
         self.status_label.pack(expand=True)
         self.preview_frame.pack_forget()
@@ -115,7 +134,7 @@ class App(ctk.CTk):
         self.after(0, self.update_ui_with_info, info)
 
     def update_ui_with_info(self, info):
-        self.fetch_btn.configure(state="normal")
+        # self.fetch_btn.configure(state="normal")
         if 'error' in info:
             self.status_label.configure(text=f"Error: {info['error']}")
             return
@@ -185,18 +204,20 @@ class App(ctk.CTk):
             elif d['status'] == 'finished':
                 self.after(0, self.progress_bar.set, 1.0)
 
-        success = self.downloader.download_video(url, options, progress_callback=progress_hook)
-        self.after(0, self.download_finished, success)
+        result = self.downloader.download_video(url, options, progress_callback=progress_hook)
+        self.after(0, self.download_finished, result)
 
-    def download_finished(self, success):
+    def download_finished(self, result):
         self.download_btn.configure(state="normal")
         self.progress_bar.grid_remove()
-        if success:
-            self.status_label.configure(text="Download Complete!")
+        
+        if result == "Success":
+            self.status_label.configure(text="Download Complete!", text_color="green")
             self.status_label.pack(side="bottom", pady=5)
             self.after(3000, self.status_label.pack_forget)
         else:
-            self.status_label.configure(text="Download Failed.")
+            # Show actual error
+            self.status_label.configure(text=f"Error: {result}", text_color="red")
             self.status_label.pack(side="bottom", pady=5)
 
 if __name__ == "__main__":

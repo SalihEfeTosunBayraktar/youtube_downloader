@@ -75,10 +75,9 @@ class YoutubeDownloader:
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-            return True
+            return "Success"
         except Exception as e:
-            print(f"Download error: {e}")
-            return False
+            return str(e)
 
 # Example usage for testing
 if __name__ == "__main__":
