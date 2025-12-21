@@ -12,19 +12,60 @@ def get_ffmpeg_path():
         if os.path.exists(ffmpeg_path):
             return ffmpeg_path
     
-    # Check local directory or PATH
+    # Check local directory
     local_ffmpeg = os.path.join(os.getcwd(), 'ffmpeg.exe')
     if os.path.exists(local_ffmpeg):
         return local_ffmpeg
-        
+    
+    # Check PATH
     return shutil.which('ffmpeg')
+
+def make_unique(path):
+    """
+    Ensures the path does not exist by appending (1), (2), etc.
+    """
+    if not os.path.exists(path):
+        return path
+    
+    base, ext = os.path.splitext(path)
+    counter = 1
+    new_path = f"{base} ({counter}){ext}"
+    while os.path.exists(new_path):
+        counter += 1
+        new_path = f"{base} ({counter}){ext}"
+    
+    return new_path
+
+class UniqueYoutubeDL(yt_dlp.YoutubeDL):
+    def prepare_filename(self, info_dict, *args, **kwargs):
+        # robustly call super
+        try:
+            path = super().prepare_filename(info_dict, *args, **kwargs)
+            return make_unique(path)
+        except Exception:
+            # Fallback if signature mismatch or other error
+            try:
+                # Try simple call
+                path = super().prepare_filename(info_dict)
+                return make_unique(path)
+            except:
+                # Ultimate fallback
+                filename = info_dict.get('_filename')
+                if not filename:
+                    title = info_dict.get('title', 'video')
+                    ext = info_dict.get('ext', 'mp4')
+                    filename = f"{title}.{ext}"
+                return make_unique(filename)
 
 class YoutubeDownloader:
     def __init__(self):
+        ffmpeg_exe = get_ffmpeg_path()
+        self.ffmpeg_location = os.path.dirname(ffmpeg_exe) if ffmpeg_exe else None
+        
         self.ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            'ffmpeg_location': os.path.dirname(get_ffmpeg_path()) if get_ffmpeg_path() else None
+            'ffmpeg_location': self.ffmpeg_location
         }
 
     def get_info(self, url):
@@ -46,91 +87,54 @@ class YoutubeDownloader:
     def download_video(self, url, options, progress_callback=None):
         """
         Downloads the video with specified options.
-        options: {
-            'format_type': 'video' or 'audio',
-            'quality': '1080p', 'best', 'worst', '128', etc. [Not fully strictly implemented mapping yet, using best/worst for simplicity first]
-            'ext': 'mp4', 'mkv', 'mp3'
-        }
         """
+        output_path = options.get('output_path', os.getcwd())
         
         # Base options
-        output_path = options.get('output_path', os.getcwd())
+        # NOTE: We use UniqueYoutubeDL so we don't need manual duplicate checks here.
         
         ydl_opts = {
             'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_callback] if progress_callback else [],
             'noplaylist': True, 
-            'ffmpeg_location': self.ydl_opts.get('ffmpeg_location'),
-            'ignoreerrors': True, # Critical for playlists to keep going
+            'ffmpeg_location': self.ffmpeg_location,
+            'ignoreerrors': True,
+            'overwrites': True, # We handle uniqueness via filename change
         }
 
         if options.get('is_playlist'):
             ydl_opts['noplaylist'] = False
-            # Fix: Ensure the directory structure is joined correctly with output_path
-            # outtmpl becomes: download_path/PlaylistName/Index - Title.ext
-            ydl_opts['outtmpl'] = os.path.join(output_path, '%(playlist_title)s', '%(playlist_index)s - %(title)s.%(ext)s')
-        else:
-            # Check duplicate filename for single video
-            # (Keep existing duplicate logic for single videos)
-            pass 
+            # Playlist subfolder structure: output_path/PlaylistName/
+            ydl_opts['outtmpl'] = os.path.join(output_path, '%(playlist_title)s', '%(title)s.%(ext)s')
 
-        # We need to apply duplicate logic only for non-playlists or complex playlists?
-        # For playlists, yt-dlp handles overwrites usually, but let's leave it to yt-dlp for now to avoid complex pre-fetching of every item.
-        
-        format_type = options.get('format_type', 'video')
-        target_ext = options.get('ext', 'mp4')
-
-        if format_type == 'audio':
+        # Format selection
+        if options.get('format_type') == 'audio':
             ydl_opts['format'] = 'bestaudio/best'
             ydl_opts['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': target_ext,
+                'preferredcodec': options.get('ext', 'mp3'),
                 'preferredquality': options.get('quality', '192'),
             }]
         else:
             # Video
-            audio_selection = 'bestaudio[ext=m4a]' if target_ext == 'mp4' else 'bestaudio'
-            if options.get('quality') == 'best':
-                ydl_opts['format'] = f'bestvideo+{audio_selection}/best'
-            else:
-                res = options.get('quality', '').replace('p', '')
-                if res.isdigit():
-                    ydl_opts['format'] = f'bestvideo[height<={res}]+{audio_selection}/best[height<={res}]'
-                else:
-                    ydl_opts['format'] = f'bestvideo+{audio_selection}/best'
+            quality = options.get('quality', 'best')
+            ext = options.get('ext', 'mp4')
             
-            ydl_opts['merge_output_format'] = target_ext
+            if quality == 'best':
+                 ydl_opts['format'] = f"bestvideo+bestaudio/best"
+            else:
+                 height = quality.split('p')[0]
+                 if height.isdigit():
+                     ydl_opts['format'] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]"
+                 else:
+                     ydl_opts['format'] = f"bestvideo+bestaudio/best"
 
-        # Only Run Duplicate Logic for Single Videos (Not Playlists)
-        if not options.get('is_playlist'):
-             try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                    
-                title = info.get('title', 'video')
-                # Basic sanitize
-                title = "".join([c for c in title if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
-                final_ext = target_ext
-                base_filename = title
-                counter = 1
-                
-                while True:
-                    if counter == 1: candidate = f"{base_filename}.{final_ext}"
-                    else: candidate = f"{base_filename} ({counter}).{final_ext}"
-                    
-                    if not os.path.exists(os.path.join(output_path, candidate)):
-                        # Valid unique name
-                        name_no_ext = os.path.splitext(candidate)[0]
-                        ydl_opts['outtmpl'] = os.path.join(output_path, f"{name_no_ext}.%(ext)s")
-                        break
-                    counter += 1
-             except:
-                 pass # Fallback to default behavior if extraction fails
+            ydl_opts['merge_output_format'] = ext
 
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Use UniqueYoutubeDL to enforce unique filenames
+            with UniqueYoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-                
             return "Success"
         except Exception as e:
             return str(e)

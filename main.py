@@ -661,15 +661,25 @@ class VideoItem(ctk.CTkFrame):
             self.quality_var.set("best")
 
     def load_thumbnail(self, url):
-        if not url: return
+        image = None
         try:
-            with urllib.request.urlopen(url) as u:
-                raw_data = u.read()
-            image = Image.open(io.BytesIO(raw_data))
+            if url:
+                with urllib.request.urlopen(url) as u:
+                    raw_data = u.read()
+                image = Image.open(io.BytesIO(raw_data))
+        except: 
+            pass
+            
+        if image is None:
+            # Fallback to app icon
+            if os.path.exists(icon_path):
+                 try: image = Image.open(icon_path)
+                 except: pass
+
+        if image:
             image.thumbnail((80, 60))
             ctk_image = ctk.CTkImage(image, size=image.size)
             self.thumb_label.configure(image=ctk_image)
-        except: pass
 
     def get_options(self):
         is_audio = self.type_var.get() == self.tr["audio"]
