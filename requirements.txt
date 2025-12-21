@@ -1,0 +1,5 @@
+yt-dlp
+customtkinter
+Pillow
+packaging
+pyinstaller
