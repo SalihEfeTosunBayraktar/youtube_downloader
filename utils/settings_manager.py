@@ -43,15 +43,7 @@ class SettingsManager:
                     data = {**self.defaults, **json.load(f)}
             except:
                 data = self.defaults.copy()
-        
-        # Migrations
-        ac = data.get("accent_color", "")
-        if ac == "red": data["accent_color"] = "crimson_red"
-        elif ac == "orange": data["accent_color"] = "golden_orange"
-        
-        if data.get("theme_mode") == "System":
-            data["theme_mode"] = "Dark"
-            
+          
         # Migrate old format keys to new separated keys if separate ones are missing
         if "default_type" in data and "default_add_type" not in data:
             data["default_add_type"] = data["default_type"]

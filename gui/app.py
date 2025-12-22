@@ -114,6 +114,10 @@ class App(ctk.CTk):
         self.settings_visible = False
         self.settings_panel.place(relx=-0.85, rely=0, relwidth=0.8, relheight=1)
 
+        # Clipboard Auto-Paste
+        self.last_clipboard_text = ""
+        self.bind("<FocusIn>", self.check_clipboard_on_focus)
+
     def toggle_settings(self):
         if self.settings_visible:
             self.animate_settings(-0.85)
@@ -339,3 +343,54 @@ class App(ctk.CTk):
         else:
             try: subprocess.call(['xdg-open', path])
             except: pass
+
+    def check_clipboard_on_focus(self, event=None):
+        try:
+            text = self.clipboard_get()
+            if not text or len(text) > 250: return
+            
+            # Simple youtube link check including shorts and music
+            if "youtube.com" in text or "youtu.be" in text:
+                if text != self.last_clipboard_text:
+                    current = self.url_entry.get()
+                    # Paste if empty or replace old clipboard content
+                    if not current or current == self.last_clipboard_text:
+                        self.url_entry.delete(0, "end")
+                        self.url_entry.insert(0, text)
+                        
+                        # 3x Fade Out/In Animation (Green <-> Gray)
+                        start_hex = "#2CC985"
+                        end_hex = "#565B5E" 
+                        
+                        s_r, s_g, s_b = tuple(int(start_hex.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+                        e_r, e_g, e_b = tuple(int(end_hex.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+                        
+                        # Generate "Green-ness" factors: 1.0 is Green, 0.0 is Gray
+                        # Sequence: 1->0 (Fade out) -> 0->1 (Fade in) -> 1->0 -> 0->1 -> 1->0
+                        factors = []
+                        phases = 5 
+                        steps = 12
+                        
+                        for p in range(phases):
+                            if p % 2 == 0: # Fade Out
+                                factors.extend([1.0 - (i/steps) for i in range(steps)])
+                            else: # Fade In
+                                factors.extend([i/steps for i in range(steps)])
+                        factors.append(0.0)
+                        
+                        for i, f in enumerate(factors):
+                            r = int(e_r + (s_r - e_r) * f)
+                            g = int(e_g + (s_g - e_g) * f)
+                            b = int(e_b + (s_b - e_b) * f)
+                            c_hex = '#{:02x}{:02x}{:02x}'.format(r, g, b)
+                            
+                            delay = 35 * i
+                            
+                            if i == len(factors) - 1:
+                                self.after(delay, lambda: self.url_entry.configure(border_color=["#979DA2", "#565B5E"]))
+                            else:
+                                self.after(delay, lambda c=c_hex: self.url_entry.configure(border_color=c))
+                        
+                    self.last_clipboard_text = text
+        except:
+            pass
