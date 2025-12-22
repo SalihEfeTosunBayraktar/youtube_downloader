@@ -4,6 +4,6 @@
     "default_format": "mp4",
     "default_quality": "480p",
     "open_folder_after": true,
-    "theme_mode": "System",
-    "accent_color": "blue"
+    "theme_mode": "dark",
+    "accent_color": "crimson_red"
 }

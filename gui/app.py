@@ -1,0 +1,425 @@
+import customtkinter as ctk
+import threading
+import os
+import sys
+import subprocess
+from downloader import YoutubeDownloader
+from utils.settings_manager import SettingsManager
+from utils.locales import TRANSLATIONS
+from .settings_panel import SettingsPanel
+from .components import VideoItem
+
+class App(ctk.CTk):
+    def __init__(self):
+        # Determine paths
+        if getattr(sys, 'frozen', False):
+            application_path = sys._MEIPASS
+        else:
+            # If running from gui/app.py context, we need to go up one level
+            # But normally we rely on __file__ being relative to root or similar
+            # Let's assume standard structure:
+            application_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if 'gui' not in application_path and 'utils' not in application_path:
+                 pass # Might be running directly? Unlikely.
+        
+        self.icon_path = os.path.join(application_path, "app_icon.ico")
+
+        # Load settings first to apply theme
+        self.settings = SettingsManager()
+        
+        # Apply Theme
+        ctk.set_appearance_mode(self.settings.get("theme_mode"))
+        color = self.settings.get("accent_color")
+        
+        # Load custom theme
+        default_themes = ["blue", "green", "dark-blue"]
+        if color not in default_themes:
+             try:
+                 theme_path = os.path.join(application_path, "themes", f"{color}.json")
+                 ctk.set_default_color_theme(theme_path)
+             except Exception as e:
+                 print(f"Failed to load theme {color}: {e}")
+                 ctk.set_default_color_theme("blue")
+        else:
+             try: ctk.set_default_color_theme(color)
+             except: ctk.set_default_color_theme("blue")
+
+        super().__init__()
+        
+        # Load translation
+        lang_code = self.settings.get("language")
+        self.tr = TRANSLATIONS.get(lang_code, TRANSLATIONS["English"])
+        
+        if os.path.exists(self.icon_path):
+            self.iconbitmap(self.icon_path)
+            
+        self.downloader = YoutubeDownloader()
+        self.reload_requested = False
+        
+        self.title(self.tr["title"])
+        self.geometry("500x750")
+        self.queue_items = []
+        self.is_downloading = False
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        # Content Main Frame (so settings can slide over it)
+        self.main_content = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_content.grid(row=0, column=0, rowspan=3, sticky="nsew")
+        self.main_content.grid_columnconfigure(0, weight=1)
+        self.main_content.grid_rowconfigure(1, weight=1)
+
+        # --- Input ---
+        input_frame = ctk.CTkFrame(self.main_content)
+        input_frame.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
+        
+        self.settings_btn = ctk.CTkButton(input_frame, text="⚙", width=40, height=35, command=self.toggle_settings)
+        self.settings_btn.pack(side="left", padx=(10, 5), pady=10)
+
+        self.url_entry = ctk.CTkEntry(input_frame, placeholder_text=self.tr["paste_link"])
+        self.url_entry.pack(side="left", fill="x", expand=True, padx=5, pady=10)
+        
+        self.add_btn = ctk.CTkButton(input_frame, text="+", width=40, height=35, command=self.fetch_info_thread)
+        self.add_btn.pack(side="right", padx=(5, 10), pady=10)
+
+        # --- Tabs ---
+        self.tabview = ctk.CTkTabview(self.main_content)
+        self.tabview.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
+        
+        self.tab_queue = self.tabview.add(self.tr.get("queue_label", "Queue"))
+        self.tab_completed = self.tabview.add(self.tr.get("completed", "Completed"))
+        
+        # Queue Tab Layout
+        self.tab_queue.grid_columnconfigure(0, weight=1)
+        self.tab_queue.grid_rowconfigure(0, weight=1)
+        self.scroll_queue = ctk.CTkScrollableFrame(self.tab_queue, label_text=None, fg_color="transparent")
+        self.scroll_queue.grid(row=0, column=0, sticky="nsew")
+        
+        # Completed Tab Layout
+        self.tab_completed.grid_columnconfigure(0, weight=1)
+        self.tab_completed.grid_rowconfigure(0, weight=1)
+        self.scroll_completed = ctk.CTkScrollableFrame(self.tab_completed, label_text=None, fg_color="transparent")
+        self.scroll_completed.grid(row=0, column=0, sticky="nsew")
+
+        # --- Footer ---
+        footer = ctk.CTkFrame(self.main_content, fg_color="transparent")
+        footer.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
+        
+        self.start_btn = ctk.CTkButton(footer, text=self.tr["start_all"], height=50, font=ctk.CTkFont(size=18, weight="bold"), command=self.start_download_queue)
+        self.start_btn.pack(fill="x")
+        
+        # --- Settings Panel (Init hidden) ---
+        self.settings_panel = SettingsPanel(self, self.settings, self.request_reload)
+        self.settings_visible = False
+        self.settings_panel.place(relx=-0.85, rely=0, relwidth=0.8, relheight=1)
+
+        # Clipboard Auto-Paste
+        self.last_clipboard_text = ""
+        self.bind("<FocusIn>", self.check_clipboard_on_focus)
+
+    def toggle_settings(self):
+        if self.settings_visible:
+            self.animate_settings(-0.85)
+            self.settings_visible = False
+        else:
+            self.settings_panel.lift() # Bring to top
+            self.animate_settings(0)
+            self.settings_visible = True
+
+    def animate_settings(self, target_RelX):
+        # Current POS
+        # We assume frame is at some relx. We can't query relx easily from tkinter place_info always returning proper float.
+        # So we step towards target.
+        # Simple hack: just jump for now OR 
+        # Smooth animation:
+        start_x = 0 if target_RelX == -0.85 else -0.85
+        if target_RelX == 0:
+             self.settings_panel.place(relx=0, rely=0, relwidth=0.8, relheight=1)
+        else:
+             self.settings_panel.place(relx=-0.85, rely=0, relwidth=0.8, relheight=1)
+
+    def open_settings(self):
+        self.toggle_settings()
+
+    def request_reload(self):
+        self.reload_requested = True
+        self.destroy()
+
+    def fetch_info_thread(self):
+        url = self.url_entry.get().strip()
+        if not url: return
+        self.add_btn.configure(state="disabled")
+        self.loading_animation_active = True
+        self.animate_loading_button()
+        threading.Thread(target=self.fetch_info, args=(url,)).start()
+
+    def animate_loading_button(self):
+        """Dönen yükleme animasyonu"""
+        if not hasattr(self, 'loading_animation_active') or not self.loading_animation_active:
+            return
+        
+        loading_chars = ["◐", "◓", "◑", "◒"]
+        if not hasattr(self, 'loading_index'):
+            self.loading_index = 0
+        
+        self.add_btn.configure(text=loading_chars[self.loading_index % len(loading_chars)])
+        self.loading_index += 1
+        self.after(150, self.animate_loading_button)
+
+    def fetch_info(self, url):
+        info = self.downloader.get_info(url)
+        self.after(0, self.add_to_queue, info)
+
+    def add_to_queue(self, info):
+        # Yükleme animasyonunu durdur
+        self.loading_animation_active = False
+        self.add_btn.configure(state="normal", text="+")
+        self.url_entry.delete(0, "end")
+        
+        if 'error' in info:
+            print(f"Error: {info['error']}")
+            return
+
+        item = VideoItem(self.scroll_queue, info, self.settings, self.remove_item, self.tr, self.icon_path)
+        item.pack(fill="x", padx=5, pady=5)
+        self.queue_items.append(item)
+
+    def remove_item(self, item):
+        if item in self.queue_items:
+            self.queue_items.remove(item)
+            item.destroy()
+
+    def start_download_queue(self):
+        if self.is_downloading: return
+        if not self.queue_items: return
+
+        self.is_downloading = True
+        self.start_btn.configure(state="disabled", text=self.tr["downloading"])
+        
+        threading.Thread(target=self.process_queue).start()
+
+    def process_queue(self):
+        # Iterate over a copy of the list to allow safe removal modification during iteration
+        items_to_process = list(self.queue_items)
+        for item in items_to_process:
+            # Check if item is valid/not destroyed before starting
+            try:
+                if not item.winfo_exists(): continue
+                # Re-check if it's still in the main list (might have been removed individually)
+                if item not in self.queue_items: continue
+                if item.status_label.cget("text") == self.tr["completed"]: continue
+            except: continue
+            
+            # Reset UI
+            item.base_status_text = self.tr.get("downloading", "Downloading")
+            self.after(0, lambda i=item: self._safe_ui_update(i, "status_color", ("blue", "#3B8ED0")))
+            
+            opts = item.get_options()
+            url = item.info.get('original_url') or item.info.get('webpage_url')
+            is_playlist = item.info.get('is_playlist', False)
+            playlist_count = item.info.get('playlist_count', 0)
+            
+            # İndirilen dosyaları takip et
+            seen_files = set()
+            
+            def make_progress_hook(current_item, files_set, p_count):
+                def progress_hook(d):
+                    if d['status'] == 'downloading':
+                        try:
+                            # Status Update Logic
+                            filename = d.get('filename', '')
+                            status_text = self.tr.get("status_downloading", "Downloading") # No '...' here, added by anim
+                            status_color = ("blue", "#3B8ED0")
+                            
+                            if p_count and p_count > 1:
+                                pl_index = d.get('info_dict', {}).get('playlist_index')
+                                if pl_index: status_text = f"Downloading {pl_index}/{p_count}"
+                            else:
+                                if "audio" in filename.lower() or filename.endswith(('.m4a', '.mp3', '.webm')): 
+                                     if len(files_set) > 1: 
+                                         status_text = self.tr.get("status_audio_downloading", "Downloading Audio")
+                                         status_color = ("purple", "#9B59B6")
+                            
+                            # Update base text for animation loop
+                            current_item.base_status_text = status_text
+                            self.after(0, lambda i=current_item: self._safe_ui_update(i, "status_color", status_color))
+                        except Exception as e:
+                            pass
+                    elif d['status'] == 'finished':
+                          pass 
+                    
+                    if d.get('postprocessor'):
+                         current_item.base_status_text = self.tr.get("status_merging", "Merging")
+                         self.after(0, lambda i=current_item: self._safe_ui_update(i, "status_color", ("orange", "#FFA500")))
+
+                return progress_hook
+            
+            # Start Status Animation
+            self.after(0, lambda: self.start_status_anim(item))
+            
+            hook = make_progress_hook(item, seen_files, playlist_count)
+            res = self.downloader.download_video(url, opts, progress_callback=hook)
+            
+            # Stop Animation
+            self.after(0, lambda: self.stop_status_anim(item))
+            
+            if res == "Success":
+                 self.after(0, lambda i=item: self.move_to_completed(i))
+            else:
+                 # Log error
+                 try:
+                     log_path = os.path.join(opts.get('output_path', ''), 'download_errors.log')
+                     with open(log_path, 'a', encoding='utf-8') as f:
+                         import datetime
+                         ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                         f.write(f"[{ts}] [{item.info.get('title', 'Unknown')}] Error: {res}\n")
+                 except: pass
+                 
+                 self.after(0, lambda i=item: self._safe_ui_update(i, "status", self.tr["failed"], ("red", "#E04F5F")))
+
+        self.is_downloading = False
+        self.after(0, lambda: self.start_btn.configure(state="normal", text=self.tr["start_all"]))
+        
+        # Check if open folder enabled (opens default path)
+        if self.settings.get("open_folder_after"):
+             path = self.settings.get("download_path")
+             self.after(0, lambda: self.open_download_folder(path))
+
+    def _safe_ui_update(self, item, action, *args):
+        try:
+            if not item.winfo_exists(): return
+            
+            if action == "status_color":
+                 item.status_label.configure(text_color=args[0])
+            elif action == "status": # Legacy support or direct set
+                 item.status_label.configure(text=args[0])
+                 if len(args) > 1: item.status_label.configure(text_color=args[1])
+        except:
+            pass
+
+    def move_to_completed(self, item):
+        try:
+            # Stop any animations on the item
+            item.anim_active = False 
+            
+            # Remove from logic queue
+            if item in self.queue_items:
+                self.queue_items.remove(item)
+                
+            # Hide old item immediately
+            item.pack_forget()
+            
+            # Create new item in completed tab
+            try:
+                new_item = VideoItem(self.scroll_completed, item.info, self.settings, lambda i: i.destroy(), self.tr, self.icon_path)
+                new_item.pack(fill="x", padx=5, pady=5)
+                new_item.status_label.configure(text=self.tr["completed"], text_color=("green", "#2CC985"))
+                
+                # Modify UI elements - Check existence for safety
+                if hasattr(new_item, 'type_menu'): new_item.type_menu.grid_remove()
+                if hasattr(new_item, 'quality_menu'): new_item.quality_menu.grid_remove()
+                if hasattr(new_item, 'format_menu'): new_item.format_menu.grid_remove()
+                if hasattr(new_item, 'adv_btn'): new_item.adv_btn.grid_remove()
+                
+                new_item.remove_btn.configure(text="X", width=30, fg_color="red", hover_color="darkred", command=lambda: new_item.destroy())
+                
+                # Open Folder Button
+                path = item.get_options()['output_path']
+                open_btn = ctk.CTkButton(new_item, text="📂", width=40, height=20, fg_color="gray", command=lambda: self.open_download_folder(path))
+                open_btn.grid(row=1, column=1, padx=5, pady=2, sticky="w")
+            except Exception as e:
+                # If UI creation fails, we still want to destroy the old item from queue
+                print(f"UI Error in completed tab: {e}")
+
+            # Destroy the original item
+            item.destroy()
+
+        except Exception as e:
+            print(f"Critical error moving to completed: {e}")
+
+    def open_download_folder(self, path=None):
+        if not path: path = self.settings.get("download_path")
+        if hasattr(os, 'startfile'):
+            try: os.startfile(path)
+            except: pass
+        elif sys.platform == 'darwin':
+            try: subprocess.call(['open', path])
+            except: pass
+        else:
+            try: subprocess.call(['xdg-open', path])
+            except: pass
+
+    def check_clipboard_on_focus(self, event=None):
+        try:
+            text = self.clipboard_get()
+            if not text or len(text) > 250: return
+            
+            # Simple youtube link check including shorts and music
+            if "youtube.com" in text or "youtu.be" in text:
+                if text != self.last_clipboard_text:
+                    current = self.url_entry.get()
+                    # Paste if empty or replace old clipboard content
+                    if not current or current == self.last_clipboard_text:
+                        self.url_entry.delete(0, "end")
+                        self.url_entry.insert(0, text)
+                        
+                        # 3x Fade Out/In Animation (Green <-> Gray)
+                        start_hex = "#2CC985"
+                        end_hex = "#565B5E" 
+                        
+                        s_r, s_g, s_b = tuple(int(start_hex.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+                        e_r, e_g, e_b = tuple(int(end_hex.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+                        
+                        # Generate "Green-ness" factors: 1.0 is Green, 0.0 is Gray
+                        # Sequence: 1->0 (Fade out) -> 0->1 (Fade in) -> 1->0 -> 0->1 -> 1->0
+                        factors = []
+                        phases = 5 
+                        steps = 12
+                        
+                        for p in range(phases):
+                            if p % 2 == 0: # Fade Out
+                                factors.extend([1.0 - (i/steps) for i in range(steps)])
+                            else: # Fade In
+                                factors.extend([i/steps for i in range(steps)])
+                        factors.append(0.0)
+                        
+                        for i, f in enumerate(factors):
+                            r = int(e_r + (s_r - e_r) * f)
+                            g = int(e_g + (s_g - e_g) * f)
+                            b = int(e_b + (s_b - e_b) * f)
+                            c_hex = '#{:02x}{:02x}{:02x}'.format(r, g, b)
+                            
+                            delay = 35 * i
+                            
+                            if i == len(factors) - 1:
+                                self.after(delay, lambda: self.url_entry.configure(border_color=["#979DA2", "#565B5E"]))
+                            else:
+                                self.after(delay, lambda c=c_hex: self.url_entry.configure(border_color=c))
+                        
+                    self.last_clipboard_text = text
+        except:
+            pass
+
+    def start_status_anim(self, item):
+        item.anim_active = True
+        item.anim_step = 0
+        self._status_anim_loop(item)
+
+    def _status_anim_loop(self, item):
+        if not getattr(item, 'anim_active', False) or not item.winfo_exists(): return
+        
+        # Base text from item property or default
+        base = getattr(item, 'base_status_text', self.tr.get("downloading", "Downloading"))
+        
+        dots = "." * (item.anim_step % 4)
+        
+        try:
+            item.status_label.configure(text=f"{base}{dots}")
+        except: pass
+        
+        item.anim_step += 1
+        self.after(500, lambda: self._status_anim_loop(item))
+
+    def stop_status_anim(self, item):
+        item.anim_active = False
