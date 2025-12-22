@@ -212,9 +212,8 @@ class App(ctk.CTk):
             except: continue
             
             # Reset UI
-            self.after(0, lambda i=item: self._safe_ui_update(i, "progress_grid"))
-            self.after(0, lambda i=item: self._safe_ui_update(i, "progress_set", 0))
-            self.after(0, lambda i=item: self._safe_ui_update(i, "status", self.tr["downloading"], ("blue", "#3B8ED0")))
+            item.base_status_text = self.tr.get("downloading", "Downloading")
+            self.after(0, lambda i=item: self._safe_ui_update(i, "status_color", ("blue", "#3B8ED0")))
             
             opts = item.get_options()
             url = item.info.get('original_url') or item.info.get('webpage_url')
@@ -228,61 +227,55 @@ class App(ctk.CTk):
                 def progress_hook(d):
                     if d['status'] == 'downloading':
                         try:
+                            # Status Update Logic
                             filename = d.get('filename', '')
-                            downloaded = d.get('downloaded_bytes', 0)
-                            total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+                            status_text = self.tr.get("status_downloading", "Downloading") # No '...' here, added by anim
+                            status_color = ("blue", "#3B8ED0")
                             
-                            if total > 0:
-                                file_progress = downloaded / total
-                                # Kaç dosya indirildi?
-                                num_seen = len(files_set)
-                                if filename not in files_set:
-                                    files_set.add(filename)
-                                    num_seen = len(files_set)
-                                
-                                # Progress Calculation
-                                if p_count and p_count > 1:
-                                    # Playlist Mode: (Completed Videos + Current Video Progress) / Total Videos
-                                    # num_seen works as "currently processing Nth file"
-                                    # BUT video + audio are separate files usually.
-                                    # Approximation: divide seen by 2 or rely on filename change?
-                                    # Simple approach: Each video is 1 unit.
-                                    # If we assume 1 file per video (merged) or we ignore duplicates:
-                                    overall = (num_seen - 1 + file_progress) / p_count
-                                else:
-                                    # Single Video Mode (Video + Audio = 2 files assumption)
-                                    base_progress = (num_seen - 1) * 0.5 if num_seen > 0 else 0
-                                    current_progress = file_progress * 0.5
-                                    overall = min(base_progress + current_progress, 1.0)
-                                
-                                self.after(0, lambda p=overall, i=current_item: self._safe_ui_update(i, "progress_set", p))
-                                
-                                # Aşama belirteci
-                                text_key = "status_video_downloading"
-                                if num_seen > 1 and not p_count: text_key = "status_audio_downloading"
-                                
-                                color = ("blue", "#3B8ED0") if text_key == "status_video_downloading" else ("purple", "#9B59B6")
-                                
-                                self.after(0, lambda i=current_item: self._safe_ui_update(i, "status", self.tr.get(text_key, "..."), color))
+                            if p_count and p_count > 1:
+                                pl_index = d.get('info_dict', {}).get('playlist_index')
+                                if pl_index: status_text = f"Downloading {pl_index}/{p_count}"
+                            else:
+                                if "audio" in filename.lower() or filename.endswith(('.m4a', '.mp3', '.webm')): 
+                                     if len(files_set) > 1: 
+                                         status_text = self.tr.get("status_audio_downloading", "Downloading Audio")
+                                         status_color = ("purple", "#9B59B6")
+                            
+                            # Update base text for animation loop
+                            current_item.base_status_text = status_text
+                            self.after(0, lambda i=current_item: self._safe_ui_update(i, "status_color", status_color))
                         except Exception as e:
-                            # print(f"Progress error: {e}") 
                             pass
                     elif d['status'] == 'finished':
-                         if not p_count: # Single video finished
-                             self.after(0, lambda i=current_item: self._safe_ui_update(i, "progress_set", 1.0))
+                          pass 
                     
-                    # Post-processing durumu
                     if d.get('postprocessor'):
-                        self.after(0, lambda i=current_item: self._safe_ui_update(i, "status", self.tr.get("status_merging", "Merging..."), ("orange", "#FFA500")))
+                         current_item.base_status_text = self.tr.get("status_merging", "Merging")
+                         self.after(0, lambda i=current_item: self._safe_ui_update(i, "status_color", ("orange", "#FFA500")))
 
                 return progress_hook
+            
+            # Start Status Animation
+            self.after(0, lambda: self.start_status_anim(item))
             
             hook = make_progress_hook(item, seen_files, playlist_count)
             res = self.downloader.download_video(url, opts, progress_callback=hook)
             
+            # Stop Animation
+            self.after(0, lambda: self.stop_status_anim(item))
+            
             if res == "Success":
                  self.after(0, lambda i=item: self.move_to_completed(i))
             else:
+                 # Log error
+                 try:
+                     log_path = os.path.join(opts.get('output_path', ''), 'download_errors.log')
+                     with open(log_path, 'a', encoding='utf-8') as f:
+                         import datetime
+                         ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                         f.write(f"[{ts}] [{item.info.get('title', 'Unknown')}] Error: {res}\n")
+                 except: pass
+                 
                  self.after(0, lambda i=item: self._safe_ui_update(i, "status", self.tr["failed"], ("red", "#E04F5F")))
 
         self.is_downloading = False
@@ -297,40 +290,53 @@ class App(ctk.CTk):
         try:
             if not item.winfo_exists(): return
             
-            if action == "progress_grid":
-                item.progress.grid()
-            elif action == "progress_set":
-                item.progress.set(args[0])
-            elif action == "status":
-                item.status_label.configure(text=args[0], text_color=args[1])
+            if action == "status_color":
+                 item.status_label.configure(text_color=args[0])
+            elif action == "status": # Legacy support or direct set
+                 item.status_label.configure(text=args[0])
+                 if len(args) > 1: item.status_label.configure(text_color=args[1])
         except:
             pass
 
     def move_to_completed(self, item):
-        item.status_label.configure(text=self.tr["completed"], text_color=("green", "#2CC985"))
-        item.progress.grid_remove() 
-        
-        if item in self.queue_items:
-            self.queue_items.remove(item)
+        try:
+            # Stop any animations on the item
+            item.anim_active = False 
             
-        item.pack_forget()
-        item.destroy()
-        
-        # Create new item in completed tab
-        new_item = VideoItem(self.scroll_completed, item.info, self.settings, lambda i: i.destroy(), self.tr, self.icon_path)
-        new_item.pack(fill="x", padx=5, pady=5)
-        new_item.status_label.configure(text=self.tr["completed"], text_color=("green", "#2CC985"))
-        new_item.progress.grid_remove()
-        
-        # Modify UI
-        new_item.type_menu.grid_remove()
-        new_item.quality_menu.grid_remove()
-        new_item.remove_btn.configure(text="X", width=30, fg_color="red", hover_color="darkred", command=lambda: new_item.destroy())
-        
-        # Open Folder Button
-        path = item.get_options()['output_path']
-        open_btn = ctk.CTkButton(new_item, text="📂", width=40, height=20, fg_color="gray", command=lambda: self.open_download_folder(path))
-        open_btn.grid(row=1, column=1, padx=5, pady=2, sticky="w")
+            # Remove from logic queue
+            if item in self.queue_items:
+                self.queue_items.remove(item)
+                
+            # Hide old item immediately
+            item.pack_forget()
+            
+            # Create new item in completed tab
+            try:
+                new_item = VideoItem(self.scroll_completed, item.info, self.settings, lambda i: i.destroy(), self.tr, self.icon_path)
+                new_item.pack(fill="x", padx=5, pady=5)
+                new_item.status_label.configure(text=self.tr["completed"], text_color=("green", "#2CC985"))
+                
+                # Modify UI elements - Check existence for safety
+                if hasattr(new_item, 'type_menu'): new_item.type_menu.grid_remove()
+                if hasattr(new_item, 'quality_menu'): new_item.quality_menu.grid_remove()
+                if hasattr(new_item, 'format_menu'): new_item.format_menu.grid_remove()
+                if hasattr(new_item, 'adv_btn'): new_item.adv_btn.grid_remove()
+                
+                new_item.remove_btn.configure(text="X", width=30, fg_color="red", hover_color="darkred", command=lambda: new_item.destroy())
+                
+                # Open Folder Button
+                path = item.get_options()['output_path']
+                open_btn = ctk.CTkButton(new_item, text="📂", width=40, height=20, fg_color="gray", command=lambda: self.open_download_folder(path))
+                open_btn.grid(row=1, column=1, padx=5, pady=2, sticky="w")
+            except Exception as e:
+                # If UI creation fails, we still want to destroy the old item from queue
+                print(f"UI Error in completed tab: {e}")
+
+            # Destroy the original item
+            item.destroy()
+
+        except Exception as e:
+            print(f"Critical error moving to completed: {e}")
 
     def open_download_folder(self, path=None):
         if not path: path = self.settings.get("download_path")
@@ -394,3 +400,26 @@ class App(ctk.CTk):
                     self.last_clipboard_text = text
         except:
             pass
+
+    def start_status_anim(self, item):
+        item.anim_active = True
+        item.anim_step = 0
+        self._status_anim_loop(item)
+
+    def _status_anim_loop(self, item):
+        if not getattr(item, 'anim_active', False) or not item.winfo_exists(): return
+        
+        # Base text from item property or default
+        base = getattr(item, 'base_status_text', self.tr.get("downloading", "Downloading"))
+        
+        dots = "." * (item.anim_step % 4)
+        
+        try:
+            item.status_label.configure(text=f"{base}{dots}")
+        except: pass
+        
+        item.anim_step += 1
+        self.after(500, lambda: self._status_anim_loop(item))
+
+    def stop_status_anim(self, item):
+        item.anim_active = False

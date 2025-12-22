@@ -18,14 +18,14 @@ class VideoItem(ctk.CTkFrame):
 
         # Thumbnail
         self.thumb_label = ctk.CTkLabel(self, text="", width=80, height=60)
-        self.thumb_label.grid(row=0, column=0, rowspan=3, padx=5, pady=5)
+        self.thumb_label.grid(row=0, column=0, rowspan=4, padx=5, pady=5)
         
         # Async thumbnail loading to prevent UI freeze
         self.load_thumbnail(info.get('thumbnail'))
 
         # Title
         title = info.get('title', 'Unknown')
-        if len(title) > 40: title = title[:37] + "..."
+        if len(title) > 30: title = title[:27] + "..."
         ctk.CTkLabel(self, text=title, font=ctk.CTkFont(weight="bold")).grid(row=0, column=1, columnspan=2, sticky="w", padx=5, pady=(5,0))
 
         # Options
@@ -58,12 +58,58 @@ class VideoItem(ctk.CTkFrame):
 
         self.remove_btn = ctk.CTkButton(self, text="X", width=30, height=20, fg_color="red", hover_color="darkred", command=lambda: self.remove_callback(self))
         self.remove_btn.grid(row=0, column=4, padx=5, pady=5, sticky="ne")
+        
+        # Advanced Options Button
+        self.adv_visible = False
+        self.adv_btn = ctk.CTkButton(self, text="...", width=30, height=20, command=self.toggle_advanced)
+        self.default_adv_fg = ctk.ThemeManager.theme["CTkButton"]["fg_color"]
+        self.adv_btn.configure(fg_color=self.default_adv_fg)
+        self.adv_btn.grid(row=1, column=4, padx=5, pady=2, sticky="ne")
 
-        # Progress
-        self.progress = ctk.CTkProgressBar(self, height=5)
-        self.progress.set(0)
-        self.progress.grid(row=3, column=0, columnspan=5, padx=5, pady=(0,5), sticky="ew")
-        self.progress.grid_remove()
+        # Progress Bar Removed
+        # self.progress = ctk.CTkProgressBar(self, height=5)
+        # self.progress.set(0)
+        # self.progress.grid(row=3, column=0, columnspan=5, padx=5, pady=(0,5), sticky="ew")
+        # self.progress.grid_remove()
+        
+        # Advanced Frame (Hidden Inline)
+        self.adv_frame = ctk.CTkFrame(self, fg_color=("gray85", "gray20"), corner_radius=6)
+        self.adv_frame.grid(row=4, column=0, columnspan=5, padx=10, pady=(0, 10), sticky="ew")
+        self.adv_frame.grid_remove() 
+        
+        # Add content to adv_frame based on type
+        is_playlist = info.get('is_playlist', False)
+        if is_playlist:
+             # Playlist UI
+             ctk.CTkLabel(self.adv_frame, text=self.tr.get("playlist_range", "Playlist Range:"), font=("Arial", 11, "bold")).pack(side="left", padx=10, pady=5)
+             self.pl_start = ctk.CTkEntry(self.adv_frame, width=60, placeholder_text="Start")
+             self.pl_start.pack(side="left", padx=5, pady=5)
+             ctk.CTkLabel(self.adv_frame, text="-").pack(side="left")
+             self.pl_end = ctk.CTkEntry(self.adv_frame, width=60, placeholder_text="End")
+             self.pl_end.pack(side="left", padx=5, pady=5)
+        else:
+             # Trim UI
+             ctk.CTkLabel(self.adv_frame, text=self.tr.get("trim_time", "Trim Time:"), font=("Arial", 11, "bold")).pack(side="left", padx=10, pady=5)
+             
+             self.trim_start = ctk.CTkEntry(self.adv_frame, width=80)
+             self.trim_start.insert(0, "00:00:00")
+             self.trim_start.pack(side="left", padx=5, pady=5)
+             
+             ctk.CTkLabel(self.adv_frame, text="-").pack(side="left")
+             
+             # Calculate duration string
+             duration = info.get('duration')
+             default_end = "00:00:00"
+             if duration:
+                 try:
+                     m, s = divmod(int(duration), 60)
+                     h, m = divmod(m, 60)
+                     default_end = "{:02d}:{:02d}:{:02d}".format(h, m, s)
+                 except: pass
+
+             self.trim_end = ctk.CTkEntry(self.adv_frame, width=80)
+             self.trim_end.insert(0, default_end)
+             self.trim_end.pack(side="left", padx=5, pady=5)
 
         # Initialize options based on current type
         self.update_options(self.type_var.get(), initial=True)
@@ -143,10 +189,35 @@ class VideoItem(ctk.CTkFrame):
         if is_audio: format_type = "audio"
         if is_thumbnail: format_type = "thumbnail"
         
-        return {
+        opts = {
             "format_type": format_type,
             "quality": self.quality_var.get(),
             "ext": self.format_var.get(),
             "is_playlist": self.info.get('is_playlist', False),
             "output_path": self.settings.get("download_path")
         }
+        
+        # Read Advanced Options
+        if hasattr(self, 'pl_start'):
+             if val := self.pl_start.get().strip(): opts["playlist_start"] = val
+        if hasattr(self, 'pl_end'):
+             if val := self.pl_end.get().strip(): opts["playlist_end"] = val
+             
+        if hasattr(self, 'trim_start'):
+             if val := self.trim_start.get().strip(): opts["trim_start"] = val
+        if hasattr(self, 'trim_end'):
+             if val := self.trim_end.get().strip(): opts["trim_end"] = val
+             
+        return opts
+
+    def toggle_advanced(self):
+        if self.type_var.get() == self.tr["thumbnail"]: return
+        
+        if self.adv_visible:
+            self.adv_frame.grid_remove()
+            self.adv_visible = False
+            self.adv_btn.configure(fg_color=self.default_adv_fg)
+        else:
+            self.adv_frame.grid()
+            self.adv_visible = True
+            self.adv_btn.configure(fg_color=("gray70", "gray40")) # Darker state for active

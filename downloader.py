@@ -20,6 +20,17 @@ def get_ffmpeg_path():
     # Check PATH
     return shutil.which('ffmpeg')
 
+def parse_time(t_str):
+    if not t_str: return None
+    try:
+        parts = t_str.strip().split(':')
+        parts = [float(p) for p in parts]
+        if len(parts) == 1: return parts[0]
+        if len(parts) == 2: return parts[0]*60 + parts[1]
+        if len(parts) == 3: return parts[0]*3600 + parts[1]*60 + parts[2]
+        return None
+    except: return None
+
 def make_unique(path):
     """
     Ensures the path does not exist by appending (1), (2), etc.
@@ -127,7 +138,7 @@ class YoutubeDownloader:
             'progress_hooks': [progress_callback] if progress_callback else [],
             'noplaylist': True, 
             'ffmpeg_location': self.ffmpeg_location,
-            'ignoreerrors': True,
+            'ignoreerrors': False,
             'overwrites': True, 
         }
 
@@ -250,6 +261,24 @@ class YoutubeDownloader:
             }]
             ydl_opts['postprocessor_args'] = ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
 
+        # Advanced Options: Playlist Range & trimming
+        pl_start = options.get('playlist_start')
+        pl_end = options.get('playlist_end')
+        if (pl_start or pl_end) and (options.get('is_playlist') or 'list=' in url):
+             s = pl_start if pl_start else ""
+             e = pl_end if pl_end else ""
+             ydl_opts['playlist_items'] = f"{s}-{e}"
+
+        t_start = options.get('trim_start')
+        t_end = options.get('trim_end')
+        if (t_start or t_end) and options.get('format_type') != 'thumbnail':
+             from yt_dlp.utils import download_range_func
+             ts = parse_time(t_start)
+             te = parse_time(t_end)
+             if ts is not None or te is not None:
+                 ydl_opts['download_ranges'] = download_range_func(None, [(ts, te)])
+                 ydl_opts['force_keyframes_at_cuts'] = True
+
         try:
             # Capture the filenames created to move them later
             # Since yt-dlp doesn't return the list easily without huge overhead,
@@ -259,14 +288,23 @@ class YoutubeDownloader:
                 with UniqueYoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
             
+            # Cleanup temp dir if empty
+            if not os.listdir(final_output_path) and not os.listdir(temp_dir):
+                 # This check is tricky because files were moved.
+                 pass
+
+            # Check if we moved anything?
+            # We can check if `seen_files` inside the caller was updated, but here we are in downloader.
+            # Better: Check if `os.listdir(temp_dir)` had items BEFORE moving.
+            
+            # Refactoring the Move Logic to track count
+            moved_count = 0
             # Move files from temp to final
             # 1. Handle Playlist Folders
             for item in os.listdir(temp_dir):
+                moved_count += 1
                 s = os.path.join(temp_dir, item)
                 d = os.path.join(final_output_path, item)
-                
-                # If d exists and is file, make unique? 
-                # Or simplistic move? 
                 
                 if os.path.isdir(s):
                     # It's a playlist folder, move content or folder?
@@ -289,6 +327,9 @@ class YoutubeDownloader:
             # Cleanup temp dir if empty
             try: os.rmdir(temp_dir)
             except: pass # might not be empty if failed files
+            
+            if moved_count == 0:
+                return "Error: No files downloaded"
             
             return "Success"
         except Exception as e:
