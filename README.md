@@ -4,6 +4,10 @@ A sleek, modern, and powerful YouTube Downloader application for Windows. Built 
 
 ![App Icon](app_icon.ico)
 
+> ⚠️ **Warning**
+>
+> Be careful: This project partly uses AI agents.
+
 ## Features
 
 - **Modern UI**: Clean, dark-themed interface using CustomTkinter.
